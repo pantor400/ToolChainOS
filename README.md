@@ -5,8 +5,8 @@ librería estándar: memoria física, heap, tareas con cambio de contexto, archi
 sobreviven al reinicio, texto UTF-8 y un canal de conversación con una IA local.
 Arranca en BIOS y UEFI desde una ISO híbrida y se ejecuta en QEMU.
 
-<!-- Badge de CI: requiere que el repositorio se llame pantor400/ToolchainOS y la rama main. -->
-[![CI](https://github.com/pantor400/ToolchainOS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pantor400/ToolchainOS/actions/workflows/ci.yml)
+<!-- Badge de CI: requiere el repositorio pantor400/ToolChainOS y la rama main. -->
+[![CI](https://github.com/pantor400/ToolChainOS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pantor400/ToolChainOS/actions/workflows/ci.yml)
 [![Licencia](https://img.shields.io/badge/licencia-MIT-brightgreen.svg)](LICENSE)
 [![Arquitectura](https://img.shields.io/badge/arquitectura-x86--64-blue.svg)](#5-subsistemas)
 [![Arranque](https://img.shields.io/badge/arranque-BIOS%20%2B%20UEFI-8957e5.svg)](#2-compilar-y-ejecutar)
@@ -85,8 +85,8 @@ El `Makefile` no requiere un cross-compilador: usa `gcc` del sistema con
 Tres comandos y el sistema arranca:
 
 ```bash
-git clone https://github.com/pantor400/ToolchainOS.git
-cd ToolchainOS
+git clone https://github.com/pantor400/ToolChainOS.git
+cd ToolChainOS
 make run        # compila el kernel, genera la ISO y arranca QEMU
 ```
 
