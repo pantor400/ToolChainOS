@@ -192,7 +192,6 @@ INICIAR_DEMO_LINUX.sh  INICIAR_DEMO_WINDOWS.bat
 src/            kernel y subsistemas en C11 y NASM
 include/        cabeceras del kernel
 scripts/        pruebas, empaquetado y validación (Python 3)
-  legacy/       guiones archivados; no se empaquetan
 docs/           INDICE.md con el orden de lectura
   diseno/       arquitectura, decisiones y fases
   guias/        explicación, guía de código, demostración y teclado

@@ -49,7 +49,7 @@ jobs:
         run: make test-scheduler-host
 
       - name: Sintaxis de los scripts
-        run: python3 -m py_compile scripts/*.py scripts/legacy/*.py
+        run: python3 -m py_compile scripts/*.py
 
       - name: Protocolo TC/1 sin IA
         run: python3 -B scripts/test_ai_protocol.py

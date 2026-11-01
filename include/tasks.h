@@ -13,5 +13,4 @@ void thread_exit(void) __attribute__((noreturn));
 void process_list(void);
 void thread_list(void);
 void scheduler_command(const char *arg);
-void process_command(const char *arg);
 #endif

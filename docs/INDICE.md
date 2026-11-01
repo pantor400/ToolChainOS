@@ -60,7 +60,7 @@ Las evidencias ejecutables (registros serie, capturas y `results.json`) viven en
 - `src/`, `include/`, `scripts/` y `artifacts/` están referenciados por el `Makefile`,
   por la suite de pruebas y por `MANIFEST_SHA256.json`; reordenarlos obliga a regenerar
   el manifiesto y a revalidar.
-- `scripts/legacy/` conserva guiones sustituidos: no los invoca el `Makefile` ni la
-  suite, y no forman parte del paquete de entrega.
+- Los scripts sustituidos se eliminaron: `scripts/` contiene solo herramientas
+  vigentes invocadas por el `Makefile`, la suite o la validación.
 - Las secuencias de fecha en los nombres (`2026-10-26`, `2026-10-29`) identifican
   instantáneas históricas y no deben renombrarse.

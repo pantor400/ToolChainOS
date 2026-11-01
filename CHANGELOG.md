@@ -43,3 +43,11 @@ PCB/TCB generales, pilas 16 KiB, FIFO Round Robin cooperativo, dormir/despertar 
 y recolección desde shell. PS, THREADS, SCHED, PROC TEST, HEAPSTATS, HEAPTEST, MEMMAP.
 Se conserva TASKS con la infraestructura común. Protocolo COM2 y formato ATA sin cambios.
 19 grupos finales aprobados; registros de intentos y bloqueos iniciales conservados.
+
+## 2026-11-01 Limpieza de código y de árbol
+Eliminadas fs_get_cwd(), keyboard_get_layout(), tasks_test_poll() y process_command()
+por no tener consumidores; str_copy_kernel() y split_path_name() sustituidas por
+copystr() y fs_split(). RUN CPP, RUN_CPP y la entrada guiada comparten run_cpp_path().
+Borrados scripts/legacy/ (seis guiones archivados), la configuración local de CLion y
+los intermedios de build/iso_root. Comportamiento del SO y comandos sin cambios;
+recompilado, verificado con check_elf y con las pruebas host PMM, heap, UTF-8 y scheduler.

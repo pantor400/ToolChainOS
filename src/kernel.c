@@ -86,24 +86,6 @@ static int previous_was_cr;
 static char pending_dir[FS_PATH_MAX];
 static char pending_name[FS_NAME_MAX];
 
-static void str_copy_kernel(char *dst, const char *src, size_t max_len){
-    if(!dst||max_len==0)return;
-    size_t i=0;
-    if(src){
-        while(src[i]&&i+1<max_len){
-            dst[i]=src[i];
-            i++;
-        }
-    }
-    dst[i]=0;
-}
-
-static int split_path_name(const char *full,char *dir,size_t ds,char *name,size_t ns){
-    (void)ds;(void)ns;
-    if(!fs_split(full,dir,name)){console_write("ERROR: RUTA O NOMBRE INVALIDO.\n");return 0;}
-    return 1;
-}
-
 static const char *skip_spaces(const char *s){while(*s==' ')s++;return s;}
 /* Lee un entero decimal limitado a +/- 1000000000. No usa atoi ni libc.
  * El limite mantiene la suma muy lejos del desbordamiento de int64_t. */
@@ -156,6 +138,24 @@ static int background(const char *name){
     int ok=console_set_colors(fg,bg);
     console_write(ok?"FONDO ACTUALIZADO CON TEXTO DE CONTRASTE.\n":"FONDO: NO HAY FRAMEBUFFER COMPATIBLE; SOLO SERIE.\n");
     return 1;
+}
+/* RUN CPP, RUN_CPP y la entrada guiada comparten la ejecucion de un script. */
+static void run_cpp_path(const char *path){
+    uint32_t size=0;
+    const char *code=fs_read_file(path,&size);
+    (void)size;
+    if(!code){
+        console_write("ARCHIVO NO ENCONTRADO: ");console_write(path);console_putc('\n');
+        return;
+    }
+    console_write("EJECUTANDO SCRIPT C++: ");console_write(path);console_putc('\n');
+    int64_t ret=0;
+    if(cpp_run_script(code,&ret)){
+        console_write("PROGRAMA FINALIZADO CON EXITO.\n");
+        console_write("VALOR DE RETORNO (main): ");
+        console_signed(ret);
+        console_putc('\n');
+    }
 }
 static void help(void){
     console_write(
@@ -239,7 +239,7 @@ static void execute(char *line){
         }else if(state==MKDIR_PATH_INPUT){
             line=(char*)skip_spaces(line);
             if(slen(line)>=sizeof(pending_dir)){console_write("ERROR: RUTA DEMASIADO LARGA.\n");state=COMMAND;return;}
-            str_copy_kernel(pending_dir,line,sizeof(pending_dir));
+            copystr(pending_dir,line,sizeof(pending_dir));
             state=MKDIR_NAME_INPUT;
         }else if(state==MKDIR_NAME_INPUT){
             line=(char*)skip_spaces(line);
@@ -253,12 +253,12 @@ static void execute(char *line){
         }else if(state==FILE_PATH_INPUT){
             line=(char*)skip_spaces(line);
             if(slen(line)>=sizeof(pending_dir)){console_write("ERROR: RUTA DEMASIADO LARGA.\n");state=COMMAND;return;}
-            str_copy_kernel(pending_dir,line,sizeof(pending_dir));
+            copystr(pending_dir,line,sizeof(pending_dir));
             state=FILE_NAME_INPUT;
         }else if(state==FILE_NAME_INPUT){
             line=(char*)skip_spaces(line);
             if(slen(line)>=sizeof(pending_name)){console_write("ERROR: NOMBRE DEMASIADO LARGO.\n");state=COMMAND;return;}
-            str_copy_kernel(pending_name,line,sizeof(pending_name));
+            copystr(pending_name,line,sizeof(pending_name));
             state=FILE_CONTENT_INPUT;
         }else if(state==FILE_CONTENT_INPUT){
             char err[64];err[0]=0;
@@ -280,21 +280,7 @@ static void execute(char *line){
             }
             state=COMMAND;
         }else if(state==RUN_CPP_INPUT){
-            line=(char*)skip_spaces(line);
-            uint32_t sz=0;
-            const char *c=fs_read_file(line,&sz);
-            if(!c){
-                console_write("ARCHIVO NO ENCONTRADO: ");console_write(line);console_putc('\n');
-            }else{
-                console_write("EJECUTANDO SCRIPT C++: ");console_write(line);console_putc('\n');
-                int64_t ret=0;
-                if(cpp_run_script(c,&ret)){
-                    console_write("PROGRAMA FINALIZADO CON EXITO.\n");
-                    console_write("VALOR DE RETORNO (main): ");
-                    console_signed(ret);
-                    console_putc('\n');
-                }
-            }
+            run_cpp_path(skip_spaces(line));
             state=COMMAND;
         }
         return;
@@ -311,7 +297,10 @@ static void execute(char *line){
     else if(equal(cmd,"PS"))process_list();
     else if(equal(cmd,"THREADS"))thread_list();
     else if(equal(cmd,"SCHED"))scheduler_command(args);
-    else if(equal(cmd,"PROC"))process_command(args);
+    else if(equal(cmd,"PROC")){
+        if(equal(args,"TEST"))scheduler_command("TEST");
+        else console_write("USO: PROC TEST\n");
+    }
     else if(equal(cmd,"HEAPSTATS"))heap_stats();
     else if(equal(cmd,"HEAPTEST"))heap_test();
     else if(equal(cmd,"MEMMAP"))pmm_map();
@@ -368,41 +357,12 @@ static void execute(char *line){
         char *sub_arg=sub;while(*sub_arg&&*sub_arg!=' ')sub_arg++;
         if(*sub_arg)*sub_arg++=0;
         sub_arg=(char*)skip_spaces(sub_arg);
-        if(equal(sub,"CPP")){
-            if(!*sub_arg){state=RUN_CPP_INPUT;return;}
-            uint32_t sz=0;
-            const char *c=fs_read_file(sub_arg,&sz);
-            if(!c){
-                console_write("ARCHIVO NO ENCONTRADO: ");console_write(sub_arg);console_putc('\n');
-            }else{
-                console_write("EJECUTANDO SCRIPT C++: ");console_write(sub_arg);console_putc('\n');
-                int64_t ret=0;
-                if(cpp_run_script(c,&ret)){
-                    console_write("PROGRAMA FINALIZADO CON EXITO.\n");
-                    console_write("VALOR DE RETORNO (main): ");
-                    console_signed(ret);
-                    console_putc('\n');
-                }
-            }
-        }else{
-            console_write("USO: RUN CPP <SCRIPT>\n");
-        }
+        if(!equal(sub,"CPP"))console_write("USO: RUN CPP <SCRIPT>\n");
+        else if(!*sub_arg)state=RUN_CPP_INPUT;
+        else run_cpp_path(sub_arg);
     }else if(equal(cmd,"RUN_CPP")){
-        if(!*args){state=RUN_CPP_INPUT;return;}
-        uint32_t sz=0;
-        const char *c=fs_read_file(args,&sz);
-        if(!c){
-            console_write("ARCHIVO NO ENCONTRADO: ");console_write(args);console_putc('\n');
-        }else{
-            console_write("EJECUTANDO SCRIPT C++: ");console_write(args);console_putc('\n');
-            int64_t ret=0;
-            if(cpp_run_script(c,&ret)){
-                console_write("PROGRAMA FINALIZADO CON EXITO.\n");
-                console_write("VALOR DE RETORNO (main): ");
-                console_signed(ret);
-                console_putc('\n');
-            }
-        }
+        if(!*args)state=RUN_CPP_INPUT;
+        else run_cpp_path(args);
     }else if(equal(cmd,"MKDIR")||equal(cmd,"CREAR_CARPETA")){
         if(!*args){state=MKDIR_PATH_INPUT;pending_dir[0]=0;return;}
         char d[FS_PATH_MAX],n[FS_NAME_MAX],err[64];
@@ -412,10 +372,10 @@ static void execute(char *line){
         if(*p2){
             *p2++=0;p2=(char*)skip_spaces(p2);
             if(slen(p1)>=sizeof(d)||slen(p2)>=sizeof(n)){console_write("ERROR: RUTA O NOMBRE DEMASIADO LARGO.\n");return;}
-            str_copy_kernel(d,p1,sizeof(d));
-            str_copy_kernel(n,p2,sizeof(n));
+            copystr(d,p1,sizeof(d));
+            copystr(n,p2,sizeof(n));
         }else{
-            if(!split_path_name(p1,d,sizeof(d),n,sizeof(n)))return;
+            if(!fs_split(p1,d,n)){console_write("ERROR: RUTA O NOMBRE INVALIDO.\n");return;}
         }
         if(fs_mkdir(d,n,err,sizeof(err))){
             console_write("CARPETA CREADA CON EXITO.\n");
@@ -429,7 +389,7 @@ static void execute(char *line){
         if(*content){*content++=0;content=(char*)skip_spaces(content);}
         char d[FS_PATH_MAX],n[FS_NAME_MAX],err[64];
         err[0]=0;
-        if(!split_path_name(fpath,d,sizeof(d),n,sizeof(n)))return;
+        if(!fs_split(fpath,d,n)){console_write("ERROR: RUTA O NOMBRE INVALIDO.\n");return;}
         if(fs_create_file(d,n,content,err,sizeof(err))){
             console_write("ARCHIVO GUARDADO CON EXITO EN RAM (DISCO: VER PERSISTENCIA/FSSTATUS).\n");
         }else{

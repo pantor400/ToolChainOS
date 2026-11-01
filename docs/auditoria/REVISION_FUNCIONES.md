@@ -37,22 +37,16 @@ static int collect_functions(void) {
 
 `cpp_run_script()` debe comprobar el valor devuelto por `collect_functions()`.
 
-## 2. Funciones duplicadas o redundantes (P2) — eliminar o fusionar
+## 2. Funciones duplicadas o redundantes (P2)
+
+Las duplicaciones triviales ya se eliminaron; el detalle está en §6.
 
 | Ubicación | Situación | Recomendación |
 |---|---|---|
-| `src/kernel.c:37-41` (`upper`, `equal`) | Duplican `ci_same()` de `include/util.h`. | Eliminar ambas y usar la cabecera. |
-| `src/kernel.c:89-99` (`str_copy_kernel`) | Duplica `copystr()`. | Eliminar. |
-| `src/kernel.c:101-105` (`split_path_name`) | Ignora `ds`/`ns` con `(void)` y solo envuelve `fs_split()` con un mensaje. | Eliminar y llamar a `fs_split()` directamente. |
-| `src/kernel.c:282-299, 366-405` | El bloque «leer archivo → `cpp_run_script` → imprimir retorno» está **tres veces** (`RUN_CPP_INPUT`, `RUN CPP`, `RUN_CPP`). | Extraer `static void run_cpp_path(const char *path)` y reutilizarlo. |
-| `src/tasks.c:249-250` (`tasks_test_poll`) | Definida y nunca declarada ni invocada. | Eliminar, o llamarla desde `kernel.c` si sustituye a `finish_test()` en `tasks_poll`. |
-| `src/tasks.c:153-183` (`legacy_entry`, `TASKS START`) | Segunda demostración de tareas que replica lo que ya prueba `SCHED TEST`. | Conservar solo si el guion docente lo exige; si no, dejar `TASKS` como alias de `SCHED`. |
-| `src/tasks.c:245-248` (`process_command`) | Único efecto: `PROC TEST` → `scheduler_command("TEST")`. | Fusionar en `scheduler_command` o eliminar el comando. |
-| `src/fs.c:19` (`fs_get_cwd`) | Sin ningún consumidor en el kernel. | Eliminar o usar en `CD`/`PWD`. |
-| `src/keyboard.c:8` (`keyboard_get_layout`) | Sin consumidores; `keyboard_menu.c` usa `keyboard_layout_name()`. | Eliminar. |
-| `src/glyph.c:26` (`glyph_supported`) | Solo lo usa `scripts/test_utf8_host.c`. | Mantener, pero documentarlo como API de prueba. |
-| `src/ata.c:97` | Comparación manual de `"READ"` carácter a carácter (`arg[0]=='R'&&arg[1]=='E'…`). | Usar un helper de prefijo y `skip_spaces`. |
-| `scripts/legacy/` | Scripts sustituidos por `package_etapas56.py`, `validate_etapas56.py` y `create_academic_report.py`; nadie los invoca. | Archivados; no forman parte del paquete. |
+| `src/kernel.c:37-41` (`upper`, `equal`) | Reimplementan `ci_same()` de `include/util.h`, pero con otra semántica: aquí se ignoran mayúsculas y se usa en 61 comparaciones. | No sustituir a ciegas: `ci_same` cambiaría esas comparaciones. Dejar como está. |
+| `src/tasks.c` (`legacy_entry`, `TASKS START`) | Segunda demostración de tareas que replica `SCHED TEST`. | Conservar: `scripts/test_core.py` envía `tasks start`, así que eliminarla invalidaría esa prueba. |
+| `src/glyph.c:26` (`glyph_supported`) | Solo lo usa `scripts/test_utf8_host.c`. | Mantener como API de prueba. |
+| `src/ata.c:97` | Comparación manual de `"READ"` carácter a carácter. | Usar un helper de prefijo y `skip_spaces`. |
 
 ## 3. Riesgos de diseño y acoplamiento (P2)
 
@@ -107,7 +101,26 @@ static int collect_functions(void) {
   `Makefile`, los scripts de prueba y `MANIFEST_SHA256.json`: reordenarlas obliga a
   regenerar el manifiesto y a revalidar la suite completa.
 
-## 6. Verificación sugerida tras aplicar cambios
+## 6. Limpieza aplicada (estado actual)
+
+Eliminado por no tener ningún consumidor ni prueba asociada:
+
+- `fs_get_cwd()` (`src/fs.c`, `include/fs.h`).
+- `keyboard_get_layout()` (`src/keyboard.c`, `include/keyboard.h`).
+- `tasks_test_poll()` (`src/tasks.c`): `tasks_poll()` ya llama a `finish_test()`.
+- `process_command()` (`src/tasks.c`, `include/tasks.h`): `PROC TEST` se resuelve en
+  `kernel.c` sin función intermedia.
+- `str_copy_kernel()` y `split_path_name()` (`src/kernel.c`): se usan `copystr()` y
+  `fs_split()` de la cabecera.
+- Duplicación del intérprete: `RUN CPP`, `RUN_CPP` y la entrada guiada comparten
+  `run_cpp_path()` (~45 líneas menos).
+- `scripts/legacy/`: los seis guiones archivados y su README.
+
+Conservados a propósito: `upper`/`equal` (61 comparaciones con semántica propia),
+`legacy_entry`/`TASKS START` (usado por `scripts/test_core.py`), `glyph_supported`,
+`pmm_is_usable` y `utf8_valid` (pruebas de host) y `asm_sumar` (didáctico).
+
+## 7. Verificación sugerida tras aplicar cambios
 
 ```bash
 make BUILD=/tmp/qos-verify iso      # compila sin tocar build/

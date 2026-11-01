@@ -5,7 +5,6 @@ static unsigned layout=KEYBOARD_ES,shift_l,shift_r,caps,caps_down,extended,pause
 static uint32_t dead;
 static uint8_t queue[8];
 static unsigned queued,read_pos;
-unsigned keyboard_get_layout(void){return layout;}
 const char *keyboard_layout_name(void){return layout==KEYBOARD_ES?"ES-LATAM (PERU)":"US";}
 int keyboard_set_layout(unsigned value){
     if(value!=KEYBOARD_ES&&value!=KEYBOARD_US)return 0;

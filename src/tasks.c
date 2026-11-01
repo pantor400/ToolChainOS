@@ -242,9 +242,3 @@ void scheduler_command(const char *arg){
     console_write("SCHEDTEST STARTED PROCESSES=2 THREADS=3 COOPERATIVE\n");
     process_list();thread_list();
 }
-void process_command(const char *arg){
-    if(ci_same(arg,"TEST"))scheduler_command("TEST");
-    else console_write("USO: PROC TEST\n");
-}
-/* Called from shell each poll to publish completion only after the final stack is reaped. */
-void tasks_test_poll(void){finish_test();}

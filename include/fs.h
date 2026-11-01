@@ -24,7 +24,6 @@ typedef struct fs_node {
 } fs_node_t;
 
 void fs_init(void);
-int fs_get_cwd(void);
 int fs_set_cwd(int idx);
 void fs_get_cwd_path(char *buf, size_t max_len);
 
