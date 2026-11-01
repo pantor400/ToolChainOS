@@ -1,0 +1,2 @@
+PASSED: PMM agotamiento/reutilizacion x2, timer creciente, tareas con pilas x3 y shell
+PASSED: excepciones division por cero y page fault en arranques aislados

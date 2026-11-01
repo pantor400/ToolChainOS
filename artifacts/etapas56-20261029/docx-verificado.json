@@ -1,0 +1,13 @@
+{
+  "file": "docs/INFORME_ACADEMICO_ETAPAS56.docx",
+  "sha256": "362c92a4d47806a1210e5bac85f3bfd336ca3daec40dfb20995c25dcf1b01604",
+  "pages": 18,
+  "render_engine": "Microsoft Word + pypdfium2",
+  "bundled_renderer": "unavailable: missing soffice.exe",
+  "all_18_pages_visually_reviewed": true,
+  "final_changed_pages_reviewed": [
+    1,
+    11,
+    12
+  ]
+}

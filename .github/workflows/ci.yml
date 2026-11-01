@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Compilación y pruebas de host
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar dependencias
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc binutils nasm xorriso python3
+
+      - name: Versiones
+        run: |
+          gcc --version | head -1
+          ld --version | head -1
+          nasm -v
+          xorriso -version | head -1
+          python3 --version
+
+      - name: Compilar el kernel y la ISO
+        run: make iso
+
+      - name: Verificar el ELF
+        run: make check
+
+      - name: PMM y heap (ASan/UBSan)
+        run: make test-memory-host
+
+      - name: UTF-8, teclado, glifos y FS (ASan/UBSan)
+        run: make test-utf8-host
+
+      - name: Cambio de contexto del planificador
+        run: make test-scheduler-host
+
+      - name: Sintaxis de los scripts
+        run: python3 -m py_compile scripts/*.py scripts/legacy/*.py
+
+      - name: Protocolo TC/1 sin IA
+        run: python3 -B scripts/test_ai_protocol.py
+
+      - name: Guardar la ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: toolchain-os-iso
+          path: build/toolchain-os.iso
+          if-no-files-found: error
+          retention-days: 7

@@ -1,0 +1,35 @@
+
+CONFIGURACION DE TECLADO / KEYBOARD SETUP
+1. Español latinoamericano (Perú) [predeterminado]
+2. English - United States (US)
+Elija 1 o 2 y Enter. Sin respuesta: ES-LATAM en 3 segundos.
+
+TECLADO: ES-LATAM (PERU)
+PS/2: distribucion del kernel. SERIAL: UTF-8 del terminal anfitrion.
+FS RECUPERADO GENERATION=4
+
+============================================================
+TOOLCHAIN OS V3.1 E56 - SISTEMA OPERATIVO X86-64
+BIENVENIDO AL LABORATORIO DE SISTEMAS OPERATIVOS
+C + NASM + LD + MAKE + LIMINE + QEMU
+KERNEL EDUCATIVO | ARCHIVOS | MEMORIA | TAREAS | PERSISTENCIA
+INTEGRACION IA: OLLAMA MEDIANTE PUENTE LINUX Y COM2
+PARA CONSULTAR A LA IA: IA <PREGUNTA>
+REQUIERE SERVIDOR OLLAMA Y PUENTE COM2 ACTIVOS.
+ESCRIBE HELP PARA VER TODOS LOS COMANDOS Y EL EDITOR.
+============================================================
+
+KERNEL_READY
+OS> open Perú/año
+Perú: año, programación, pingüino. ¿Qué? ¡Sí! ÁÉÍÓÚ Ñ Ü.
+Segunda línea: áéíóú ñ ü
+OS> copy Perú/año Perú/copia
+OPERACION OK.
+PERSISTENCIA OK GENERATION=5
+OS> open Perú/copia
+Perú: año, programación, pingüino. ¿Qué? ¡Sí! ÁÉÍÓÚ Ñ Ü.
+Segunda línea: áéíóú ñ ü
+OS> rm Perú/año
+OPERACION OK.
+PERSISTENCIA OK GENERATION=6
+OS> 

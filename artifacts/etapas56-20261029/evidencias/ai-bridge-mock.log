@@ -1,0 +1,15 @@
+COM2 CONNECTED; API LOCAL; MODEL=transport-mock
+REQUEST id=1 type=2 bytes=0
+RESPONSE id=1 bytes=33
+REQUEST id=2 type=1 bytes=17
+RESPONSE id=2 bytes=92
+REQUEST id=3 type=1 bytes=5
+RESPONSE id=3 bytes=4005
+REQUEST id=4 type=1 bytes=9
+ERROR id=4 type=JSONDecodeError
+REQUEST id=5 type=1 bytes=10
+ERROR id=5 type=HTTPError
+REQUEST id=6 type=1 bytes=8
+CANCEL id=6
+REQUEST id=7 type=2 bytes=0
+RESPONSE id=7 bytes=33

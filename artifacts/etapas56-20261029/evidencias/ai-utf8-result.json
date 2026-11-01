@@ -1,0 +1,8 @@
+{
+  "type": "REAL_OLLAMA_INFERENCE",
+  "model": "qwen2.5:0.5b",
+  "prompt": "Repite esta frase en español, conservando tildes y signos: ¡Hola, Perú! El año trae programación y pingüinos. ¿Qué tal?",
+  "response": "¡Hola, Perú! El año trae programación y pingüinos. ¿Qué tal?",
+  "strict_utf8_decode": true,
+  "spanish_characters_present": true
+}

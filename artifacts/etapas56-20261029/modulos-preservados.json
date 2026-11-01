@@ -1,0 +1,13 @@
+[
+  "src/ai_serial.c",
+  "scripts/ai_bridge.py",
+  "src/ata.c",
+  "src/storage.c",
+  "src/fs.c",
+  "src/editor.c",
+  "src/interrupts.c",
+  "src/interrupt_stubs.asm",
+  "src/keyboard.c",
+  "src/utf8.c",
+  "src/console.c"
+]

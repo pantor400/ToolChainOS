@@ -1,0 +1,2 @@
+PASSED: seleccion ES y US con PS/2 real emulado, cambio TECLADO, deadkeys, AltGr y capturas
+PASSED: opcion por defecto sin bloqueo; 16 casos seriales UTF-8, invalidez, Backspace, editor/FS y limite en bytes

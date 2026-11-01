@@ -1,0 +1,5 @@
+disk info
+ATA PRIMARY MASTER 0x1F0 LBA28 MODEL=QEMU HARDDISK                            SECTORS=16384 WRITE=AUTHORIZED
+OS> suma 5 6
+5 + 6 = 11
+C

@@ -1,0 +1,18 @@
+test_api_contract_mock_only (__main__.ProtocolTests.test_api_contract_mock_only) ... ok
+test_checksum_resync (__main__.ProtocolTests.test_checksum_resync) ... ok
+test_concurrency_bound (__main__.ProtocolTests.test_concurrency_bound) ... ok
+test_fragmentation (__main__.ProtocolTests.test_fragmentation) ... ok
+test_invalid_generation (__main__.ProtocolTests.test_invalid_generation) ... ok
+test_invalid_version_and_length (__main__.ProtocolTests.test_invalid_version_and_length) ... ok
+test_json_error (__main__.ProtocolTests.test_json_error) ... ok
+test_model_missing (__main__.ProtocolTests.test_model_missing) ... ok
+test_multiple_and_noise (__main__.ProtocolTests.test_multiple_and_noise) ... ok
+test_redirect_rejected (__main__.ProtocolTests.test_redirect_rejected) ... ok
+test_size_limit (__main__.ProtocolTests.test_size_limit) ... ok
+test_url_restrictions (__main__.ProtocolTests.test_url_restrictions) ... ok
+test_utf8_truncation (__main__.ProtocolTests.test_utf8_truncation) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.070s
+
+OK

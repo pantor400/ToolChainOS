@@ -1,0 +1,48 @@
+--- before/src/context.asm
++++ after/src/context.asm
+@@ -17,4 +17,45 @@
+     pop rbx
+     pop rbp
+     ret
++GLOBAL context_probe
++; SysV callee-preserved register test across an actual scheduler yield.
++context_probe:
++    push rbp
++    push rbx
++    push r12
++    push r13
++    push r14
++    push r15
++    sub rsp,8
++    mov rax,rdi
++    mov rbp,0x11223344
++    mov rbx,0x22334455
++    mov r12,0x33445566
++    mov r13,0x44556677
++    mov r14,0x55667711
++    mov r15,0x66771122
++    call rax
++    xor eax,eax
++    cmp rbp,0x11223344
++    jne .done
++    cmp rbx,0x22334455
++    jne .done
++    cmp r12,0x33445566
++    jne .done
++    cmp r13,0x44556677
++    jne .done
++    cmp r14,0x55667711
++    jne .done
++    cmp r15,0x66771122
++    jne .done
++    mov eax,1
++.done:
++    add rsp,8
++    pop r15
++    pop r14
++    pop r13
++    pop r12
++    pop rbx
++    pop rbp
++    ret
+ SECTION .note.GNU-stack noalloc noexec nowrite progbits

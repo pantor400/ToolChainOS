@@ -1,0 +1,11 @@
+--- before/scripts/test_core.py
++++ after/scripts/test_core.py
+@@ -10,7 +10,7 @@
+     time.sleep(.2)
+     assert int(re.search(r'TICKS=(\d+)',g.send('uptime')).group(1))>t
+     g.send('tasks start',['COOPERATIVAS'])
+-    g.send('suma 4 5',['= 9'])
++    g.send('suma 4 5',['= 9'],async_output=True)
+     time.sleep(.4)
+     text=g.send('tasks',['TASK 1 DEAD STEPS=3','TASK 2 DEAD STEPS=3'])
+     assert b'TASK 1 STEP 1' in g.transcript and b'TASK 2 STEP 1' in g.transcript

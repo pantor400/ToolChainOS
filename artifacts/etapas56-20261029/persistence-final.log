@@ -1,0 +1,1 @@
+PASSED: ATA lectura inicial sin escritura, limites, WRITE/READ/RESTORE, persistencia en 3 arranques, recuperacion/corrupcion y fallo I/O inyectado

@@ -1,0 +1,68 @@
+
+CONFIGURACION DE TECLADO / KEYBOARD SETUP
+1. Español latinoamericano (Perú) [predeterminado]
+2. English - United States (US)
+Elija 1 o 2 y Enter. Sin respuesta: ES-LATAM en 3 segundos.
+
+TECLADO: ES-LATAM (PERU)
+PS/2: distribucion del kernel. SERIAL: UTF-8 del terminal anfitrion.
+FS MODE=RAM (SIN ATA)
+
+============================================================
+TOOLCHAIN OS V3.1 E56 - SISTEMA OPERATIVO X86-64
+BIENVENIDO AL LABORATORIO DE SISTEMAS OPERATIVOS
+C + NASM + LD + MAKE + LIMINE + QEMU
+KERNEL EDUCATIVO | ARCHIVOS | MEMORIA | TAREAS | PERSISTENCIA
+INTEGRACION IA: OLLAMA MEDIANTE PUENTE LINUX Y COM2
+PARA CONSULTAR A LA IA: IA <PREGUNTA>
+REQUIERE SERVIDOR OLLAMA Y PUENTE COM2 ACTIVOS.
+ESCRIBE HELP PARA VER TODOS LOS COMANDOS Y EL EDITOR.
+============================================================
+
+KERNEL_READY
+OS> ia status
+IA REQUEST 1 STATUS: VERIFICANDO PUENTE/MODELO
+OS> 
+IA RESPONSE: OLLAMA READY MODEL=transport-mock
+IA END
+OS> ia prueba transporte
+IA REQUEST 2 ENVIADA (COM2); SHELL DISPONIBLE
+OS> 
+IA RESPONSE: TRANSPORT MOCK ONLY: año Perú programación áéíóú ÁÉÍÓÚ ñÑ üÜ ¿Qué? ¡Sí!
+IA END
+OS> ia larga
+IA REQUEST 3 ENVIADA (COM2); SHELL DISPONIBLE
+OS> 
+IA RESPONSE: MOCK ááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááá [TRUNCATED]
+IA END
+OS> ia malformed
+IA REQUEST 4 ENVIADA (COM2); SHELL DISPONIBLE
+OS> 
+ERROR IA: JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+IA END
+OS> ia http-error
+IA REQUEST 5 ENVIADA (COM2); SHELL DISPONIBLE
+OS> 
+ERROR IA: HTTPError: HTTP Error 503: Service Unavailable
+IA END
+OS> ia cancelar
+IA REQUEST 6 ENVIADA (COM2); SHELL DISPONIBLE
+OS> ia cancel
+IA CANCELADA; RESPUESTAS TARDIAS DESCARTADAS.
+OS> suma 7 8
+7 + 8 = 15
+CALCULADO POR NASM, LLAMADO DESDE C.
+OS> ia status
+IA REQUEST 7 STATUS: VERIFICANDO PUENTE/MODELO
+OS> 
+IA RESPONSE: OLLAMA READY MODEL=transport-mock
+IA END
+OS> ia status
+IA REQUEST 8 STATUS: VERIFICANDO PUENTE/MODELO
+OS> 
+ERROR IA: TIMEOUT; PUENTE O MODELO NO DISPONIBLE
+IA END
+OS> suma 8 9
+8 + 9 = 17
+CALCULADO POR NASM, LLAMADO DESDE C.
+OS> 

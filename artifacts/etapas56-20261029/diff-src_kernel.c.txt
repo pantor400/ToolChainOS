@@ -1,0 +1,58 @@
+--- before/src/kernel.c
++++ after/src/kernel.c
+@@ -7,6 +7,7 @@
+ #include "util.h"
+ #include "editor.h"
+ #include "pmm.h"
++#include "heap.h"
+ #include "interrupts.h"
+ #include "tasks.h"
+ #include "ata.h"
+@@ -159,7 +160,7 @@
+ static void help(void){
+     console_write(
+         "============================================================\n"
+-        "HELP - COMANDOS DE TOOLCHAIN OS V3.1\n"
++        "HELP - COMANDOS DE TOOLCHAIN OS V3.1 E56\n"
+         "[SISTEMA Y UTILIDADES]\n"
+         "TECLADO [ES|US|1|2] - MAPA PS/2; SERIAL RECIBE UTF-8 DEL ANFITRION\n"
+         "HELP | INFO | MEM | UPTIME - AYUDA, SISTEMA, MEMORIA Y RELOJ\n"
+@@ -181,6 +182,8 @@
+         "LAS DEMAS LINEAS SON TEXTO; BACKSPACE CORRIGE LA ENTRADA\n"
+         "[MEMORIA, INTERRUPCIONES Y TAREAS]\n"
+         "MEMSTATS | PMMTEST - ESTADISTICAS Y PRUEBA DE PAGINAS\n"
++        "HEAPSTATS | HEAPTEST | MEMMAP - HEAP Y MAPA LIMINE\n"
++        "PS | THREADS | SCHED | SCHED TEST | PROC TEST - PROCESOS KERNEL Y RR\n"
+         "TASKS | TASKS START - ESTADOS E INICIO DE TAREAS COOPERATIVAS\n"
+         "UPTIME - TICKS PIT | EXTEST DE/PF - EXCEPCION FATAL DE PRUEBA\n"
+         "[DISCO Y PERSISTENCIA]\n"
+@@ -305,6 +308,13 @@
+     else if(equal(cmd,"DISK"))disk_command(args);
+     else if(equal(cmd,"FSSTATUS"))storage_status();
+     else if(equal(cmd,"TASKS"))tasks_command(args);
++    else if(equal(cmd,"PS"))process_list();
++    else if(equal(cmd,"THREADS"))thread_list();
++    else if(equal(cmd,"SCHED"))scheduler_command(args);
++    else if(equal(cmd,"PROC"))process_command(args);
++    else if(equal(cmd,"HEAPSTATS"))heap_stats();
++    else if(equal(cmd,"HEAPTEST"))heap_test();
++    else if(equal(cmd,"MEMMAP"))pmm_map();
+     else if(equal(cmd,"MEMSTATS"))pmm_stats();
+     else if(equal(cmd,"PMMTEST"))pmm_test();
+     else if(equal(cmd,"UPTIME"))uptime();
+@@ -461,13 +471,14 @@
+     if(framebuffer.response&&framebuffer.response->framebuffer_count)
+         console_init(framebuffer.response->framebuffers[0]);
+     pmm_init(memmap.response,hhdm.response?hhdm.response->offset:0);
++    tasks_init();
+     interrupts_init();
+     keyboard_boot_setup();
+     fs_init();
+     ata_init();
+     storage_init();
+     console_write("\n============================================================\n");
+-    console_write("TOOLCHAIN OS V3.1 - SISTEMA OPERATIVO X86-64\n");
++    console_write("TOOLCHAIN OS V3.1 E56 - SISTEMA OPERATIVO X86-64\n");
+     console_write("BIENVENIDO AL LABORATORIO DE SISTEMAS OPERATIVOS\n");
+     console_write("C + NASM + LD + MAKE + LIMINE + QEMU\n");
+     console_write("KERNEL EDUCATIVO | ARCHIVOS | MEMORIA | TAREAS | PERSISTENCIA\n");

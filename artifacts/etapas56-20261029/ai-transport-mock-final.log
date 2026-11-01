@@ -1,0 +1,2 @@
+PASSED: framing byte a byte, concatenacion, checksum, longitud y loopback
+PASSED: COM1/COM2, mock HTTP, status, respuesta, truncamiento UTF8, JSON/HTTP error, cancelacion y desconexion

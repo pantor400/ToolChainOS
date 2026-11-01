@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/home/user/proyectos/ToolchainOS/build/qa-etapas56/scripts/test_memory_scheduler.py", line 53, in <module>
+    assert len(owners)==2 and min(owners)>last_pid;last_pid=max(owners)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError

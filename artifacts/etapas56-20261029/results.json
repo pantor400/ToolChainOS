@@ -1,0 +1,144 @@
+{
+  "results": [
+    {
+      "name": "build",
+      "status": "PASSED",
+      "code": 0,
+      "seconds": 0.52,
+      "log": "build-final.log"
+    },
+    {
+      "name": "memory-host",
+      "status": "PASSED",
+      "code": 0,
+      "seconds": 1.22,
+      "log": "memory-host-final.log"
+    },
+    {
+      "name": "scheduler-host",
+      "status": "PASSED",
+      "code": 0,
+      "seconds": 1.47,
+      "log": "scheduler-host-final.log"
+    },
+    {
+      "name": "memory-scheduler-qemu",
+      "status": "PASSED",
+      "code": 0,
+      "seconds": 21.63,
+      "log": "memory-scheduler-qemu-final.log"
+    },
+    {
+      "name": "utf8-host",
+      "status": "PASSED",
+      "code": 0,
+      "seconds": 2.08,
+      "log": "utf8-host-final.log"
+    },
+    {
+      "name": "fs-host",
+      "status": "PASSED",
+      "code": 0,
+      "seconds": 1.27,
+      "log": "fs-host-final.log"
+    },
+    {
+      "name": "ai-protocol-host",
+      "status": "PASSED",
+      "code": 0,
+      "seconds": 0.27,
+      "log": "ai-protocol-host-final.log"
+    },
+    {
+      "name": "legacy",
+      "status": "PASSED",
+      "code": 0,
+      "seconds": 5.49,
+      "log": "legacy-final.log"
+    },
+    {
+      "name": "files-editor",
+      "status": "PASSED",
+      "code": 0,
+      "seconds": 5.19,
+      "log": "files-editor-final.log"
+    },
+    {
+      "name": "core",
+      "status": "PASSED",
+      "code": 0,
+      "seconds": 13.79,
+      "log": "core-final.log"
+    },
+    {
+      "name": "utf8-keyboard",
+      "status": "PASSED",
+      "code": 0,
+      "seconds": 11.28,
+      "log": "utf8-keyboard-final.log"
+    },
+    {
+      "name": "persistence",
+      "status": "PASSED",
+      "code": 0,
+      "seconds": 33.52,
+      "log": "persistence-final.log"
+    },
+    {
+      "name": "utf8-persistence",
+      "status": "PASSED",
+      "code": 0,
+      "seconds": 15.1,
+      "log": "utf8-persistence-final.log"
+    },
+    {
+      "name": "uefi",
+      "status": "PASSED",
+      "code": 0,
+      "seconds": 7.1,
+      "log": "uefi-final.log"
+    },
+    {
+      "name": "ai-transport-mock",
+      "status": "PASSED",
+      "code": 0,
+      "seconds": 8.52,
+      "log": "ai-transport-mock-final.log"
+    },
+    {
+      "name": "ai-real",
+      "status": "PASSED",
+      "code": 0,
+      "seconds": 7.05,
+      "log": "ai-real-final.log"
+    },
+    {
+      "name": "ai-utf8-real",
+      "status": "PASSED",
+      "code": 0,
+      "seconds": 5.24,
+      "log": "ai-utf8-real-final.log"
+    },
+    {
+      "name": "launcher",
+      "status": "PASSED",
+      "code": 0,
+      "seconds": 4.94,
+      "log": "launcher-final.log"
+    },
+    {
+      "name": "presentation",
+      "status": "PASSED",
+      "code": 0,
+      "seconds": 4.49,
+      "log": "presentation-final.log"
+    }
+  ],
+  "counts": {
+    "PASSED": 19,
+    "FAILED": 0,
+    "BLOCKED": 0,
+    "SKIPPED": 0
+  },
+  "protected_unchanged": true
+}

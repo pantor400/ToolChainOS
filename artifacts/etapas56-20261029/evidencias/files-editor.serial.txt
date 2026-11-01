@@ -1,0 +1,116 @@
+
+CONFIGURACION DE TECLADO / KEYBOARD SETUP
+1. Español latinoamericano (Perú) [predeterminado]
+2. English - United States (US)
+Elija 1 o 2 y Enter. Sin respuesta: ES-LATAM en 3 segundos.
+
+TECLADO: ES-LATAM (PERU)
+PS/2: distribucion del kernel. SERIAL: UTF-8 del terminal anfitrion.
+FS MODE=RAM (SIN ATA)
+
+============================================================
+TOOLCHAIN OS V3.1 E56 - SISTEMA OPERATIVO X86-64
+BIENVENIDO AL LABORATORIO DE SISTEMAS OPERATIVOS
+C + NASM + LD + MAKE + LIMINE + QEMU
+KERNEL EDUCATIVO | ARCHIVOS | MEMORIA | TAREAS | PERSISTENCIA
+INTEGRACION IA: OLLAMA MEDIANTE PUENTE LINUX Y COM2
+PARA CONSULTAR A LA IA: IA <PREGUNTA>
+REQUIERE SERVIDOR OLLAMA Y PUENTE COM2 ACTIVOS.
+ESCRIBE HELP PARA VER TODOS LOS COMANDOS Y EL EDITOR.
+============================================================
+
+KERNEL_READY
+OS> mkdir a
+CARPETA CREADA CON EXITO.
+OS> crear a/one hola
+ARCHIVO GUARDADO CON EXITO EN RAM (DISCO: VER PERSISTENCIA/FSSTATUS).
+OS> copy a/one a/two
+OPERACION OK.
+OS> copy a/one a/two
+ERROR: DESTINO YA EXISTE; COPY NO SOBRESCRIBE.
+OS> ren a/two three
+OPERACION OK.
+OS> open a/three
+hola
+OS> rmdir a
+ERROR: CARPETA NO VACIA.
+OS> rm a
+ERROR: TIPO INCORRECTO.
+OS> rm /
+ERROR: NO EXISTE O ES RAIZ.
+OS> crear a/one/illegal no
+ERROR: CARPETA DESTINO INVALIDA.
+OS> mkdir zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+ERROR: RUTA O NOMBRE INVALIDO.
+OS> open zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+ARCHIVO NO ENCONTRADO O NO ES UN ARCHIVO DE TEXTO.
+OS> tree /
+//
+  script
+  nota
+  a/
+    one
+    three
+OS> rm a/three
+OPERACION OK.
+OS> rm a/one
+OPERACION OK.
+OS> rmdir a
+OPERACION OK.
+OS> edit note
+EDITOR 1023 BYTES UTF-8: texto agrega linea; :line N texto reemplaza, :del N, :clear, :show, :wq, :q
+EDIT> int main(){
+EDIT> return 41;
+EDIT> }
+EDIT> :line 2 return 42;
+EDIT> :wq
+ARCHIVO GUARDADO CON EXITO EN RAM (DISCO: VER PERSISTENCIA/FSSTATUS).
+OS> open note
+int main(){
+return 42;
+}
+OS> run cpp note
+EJECUTANDO SCRIPT C++: note
+PROGRAMA FINALIZADO CON EXITO.
+VALOR DE RETORNO (main): 42
+OS> edit note
+EDITOR 1023 BYTES UTF-8: texto agrega linea; :line N texto reemplaza, :del N, :clear, :show, :wq, :q
+int main(){
+return 42;
+}
+EDIT> :clear
+EDIT> HALT
+EDIT> :q
+EDICION CANCELADA.
+OS> open note
+int main(){
+return 42;
+}
+OS> edit empty
+EDITOR 1023 BYTES UTF-8: texto agrega linea; :line N texto reemplaza, :del N, :clear, :show, :wq, :q
+EDIT> :wq
+ARCHIVO GUARDADO CON EXITO EN RAM (DISCO: VER PERSISTENCIA/FSSTATUS).
+OS> open empty
+
+OS> edit limit
+EDITOR 1023 BYTES UTF-8: texto agrega linea; :line N texto reemplaza, :del N, :clear, :show, :wq, :q
+EDIT> xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+EDIT> y
+ERROR: LIMITE 1023 BYTES; SIN CAMBIOS.
+EDIT> :wq
+ARCHIVO GUARDADO CON EXITO EN RAM (DISCO: VER PERSISTENCIA/FSSTATUS).
+OS> ls
+CONTENIDO DE: /
+  [TXT] script (108 B)
+  [TXT] nota (80 B)
+  [TXT] note (25 B)
+  [TXT] empty (0 B)
+  [TXT] limit (1023 B)
+OS> crear too yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
+ERROR: CONTENIDO EXCEDE 1023 BYTES.
+OS> eco qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq
+ERROR: LINEA DEMASIADO LARGA; DESCARTADA.
+OS> suma 1 2
+1 + 2 = 3
+CALCULADO POR NASM, LLAMADO DESDE C.
+OS> 

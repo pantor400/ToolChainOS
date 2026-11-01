@@ -1,0 +1,51 @@
+
+CONFIGURACION DE TECLADO / KEYBOARD SETUP
+1. Español latinoamericano (Perú) [predeterminado]
+2. English - United States (US)
+Elija 1 o 2 y Enter. Sin respuesta: ES-LATAM en 3 segundos.
+1
+TECLADO: ES-LATAM (PERU)
+PS/2: distribucion del kernel. SERIAL: UTF-8 del terminal anfitrion.
+FS MODE=RAM (SIN ATA)
+
+============================================================
+TOOLCHAIN OS V3.1 E56 - SISTEMA OPERATIVO X86-64
+BIENVENIDO AL LABORATORIO DE SISTEMAS OPERATIVOS
+C + NASM + LD + MAKE + LIMINE + QEMU
+KERNEL EDUCATIVO | ARCHIVOS | MEMORIA | TAREAS | PERSISTENCIA
+INTEGRACION IA: OLLAMA MEDIANTE PUENTE LINUX Y COM2
+PARA CONSULTAR A LA IA: IA <PREGUNTA>
+REQUIERE SERVIDOR OLLAMA Y PUENTE COM2 ACTIVOS.
+ESCRIBE HELP PARA VER TODOS LOS COMANDOS Y EL EDITOR.
+============================================================
+
+KERNEL_READY
+OS> teclado
+TECLADO: ES-LATAM (PERU)
+PS/2: distribucion del kernel. SERIAL: UTF-8 del terminal anfitrion.
+OS> eco año
+ESCRIBISTE: año
+OS> eco Perú
+ESCRIBISTE: Perú
+OS> eco áÑü¿¡?!
+ESCRIBISTE: áÑü¿¡?!
+OS> eco @
+ESCRIBISTE: @
+OS> eco ñ a
+ESCRIBISTE: a
+OS> teclado us
+TECLADO: US
+PS/2: distribucion del kernel. SERIAL: UTF-8 del terminal anfitrion.
+OS> eco ;
+ESCRIBISTE: ;
+OS> teclado es
+TECLADO: ES-LATAM (PERU)
+PS/2: distribucion del kernel. SERIAL: UTF-8 del terminal anfitrion.
+OS> eco ñ
+ESCRIBISTE: ñ
+OS> limpiar
+OS> eco á é í ó ú Á É Í Ó Ú ñ Ñ ü Ü ¿Qué? ¡Perú!
+ESCRIBISTE: á é í ó ú Á É Í Ó Ú ñ Ñ ü Ü ¿Qué? ¡Perú!
+OS> color rojo
+COLOR DE TEXTO ACTUALIZADO.
+OS> 

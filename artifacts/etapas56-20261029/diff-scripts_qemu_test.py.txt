@@ -1,0 +1,19 @@
+--- before/scripts/qemu_test.py
++++ after/scripts/qemu_test.py
+@@ -18,14 +18,14 @@
+                 data=os.read(self.q.stdout.fileno(),4096)
+                 self.buffer.extend(data);self.transcript.extend(data)
+         return self.buffer.decode(errors='replace')
+-    def send(self, command, expected=(), marker='OS> ', timeout=35):
++    def send(self, command, expected=(), marker='OS> ', timeout=35, async_output=False):
+         self.buffer.clear();data=command.encode()
+         # UART input throttling also permits checking file-size boundaries.
+         for i in range(0,len(data),32):
+             self.q.stdin.write(data[i:i+32]);self.q.stdin.flush();time.sleep(.004)
+         if not command.endswith('\n'): self.q.stdin.write(b'\n');self.q.stdin.flush()
+         prefix=command[:24].rstrip('\n')
+-        if prefix:
++        if prefix and not async_output:
+             self.until(prefix,timeout)
+             start=self.buffer.find(prefix.encode())+len(prefix.encode())
+         else:start=0

@@ -1,0 +1,14 @@
+xorriso 1.5.6 : RockRidge filesystem manipulator, libburnia project.
+
+Copying of file objects from ISO image to disk filesystem is: Enabled
+xorriso : NOTE : Loading ISO image tree from LBA 0
+xorriso : UPDATE :      11 nodes read in 1 seconds
+xorriso : NOTE : Detected El-Torito boot information which currently is set to be discarded
+Drive current: -indev 'build/toolchain-os.iso'
+Media current: stdio file, overwriteable
+Media status : is written , is appendable
+Boot record  : El Torito , MBR protective-msdos-label cyl-align-off GPT
+Media summary: 1 session, 2072 data blocks, 4144k data,  946g free
+Volume id    : 'ISOIMAGE'
+xorriso : UPDATE :       1 files restored ( 367.2k) in 1 seconds = 0.3xD
+Extracted from ISO image: file '/boot/kernel.elf'='/home/user/proyectos/ToolchainOS/artifacts/etapas56-20261029/iso-inspeccion/kernel.elf'

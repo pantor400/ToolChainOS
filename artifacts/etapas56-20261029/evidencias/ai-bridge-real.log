@@ -1,0 +1,5 @@
+COM2 CONNECTED; API LOCAL; MODEL=qwen2.5:0.5b
+REQUEST id=1 type=2 bytes=0
+RESPONSE id=1 bytes=31
+REQUEST id=2 type=1 bytes=59
+RESPONSE id=2 bytes=162

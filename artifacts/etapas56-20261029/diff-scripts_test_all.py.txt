@@ -1,0 +1,12 @@
+--- before/scripts/test_all.py
++++ after/scripts/test_all.py
+@@ -5,6 +5,9 @@
+ steps=[
+  ('build',[['make','iso']],['gcc','nasm','ld','xorriso']),
+  ('elf',[['make','check']],['python3']),
++ ('memory-host',[['make','test-memory-host']],['gcc']),
++ ('scheduler-host',[['make','test-scheduler-host']],['gcc','nasm']),
++ ('memory-scheduler-qemu',[['python3','scripts/test_memory_scheduler.py']],['qemu-system-x86_64']),
+  ('fs-host',[['gcc','-std=c11','-Wall','-Wextra','-Werror','-fsanitize=address,undefined','-Iinclude','-Ivendor/limine','scripts/test_fs_host.c','src/fs.c','-o','build/test-fs-host'],['build/test-fs-host']],['gcc']),
+  ('utf8-host',[['make','test-utf8-host']],['gcc']),
+  ('utf8-keyboard',[['python3','scripts/test_utf8_keyboard.py']],['qemu-system-x86_64']),

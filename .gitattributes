@@ -1,0 +1,36 @@
+# Normaliza finales de línea en el texto; el kernel se compila con gcc de Linux.
+* text=auto eol=lf
+
+*.c        text
+*.h        text
+*.asm      text
+*.py       text
+*.sh       text
+*.md       text
+*.txt      text
+*.conf     text
+Makefile   text
+*.ld       text
+
+# Binarios: nunca normalizar ni mostrar diff de texto.
+*.png      binary
+*.docx     binary
+*.iso      binary
+*.img      binary
+*.elf      binary
+*.bin      binary
+*.efi      binary
+*.sys      binary
+*.o        binary
+
+# Evidencias: conservar los bytes exactos (registros con CRLF y hashes sellados)
+artifacts/** -text
+
+# GitHub: no contar binarios de Limine en las estadísticas del repositorio.
+vendor/**  linguist-vendored
+artifacts/** linguist-documentation
+docs/**    linguist-documentation
+
+# Archivos generados: excluir de los diffs de revisión.
+MANIFEST_SHA256.json  linguist-generated
+SHA256SUMS            linguist-generated

@@ -1,0 +1,11 @@
+{
+  "existing_images_and_archives_unchanged": true,
+  "protected_count": 18,
+  "python_syntax": "PASSED",
+  "embedded_elf_matches": "PASSED",
+  "published_iso_matches_tested": "PASSED",
+  "published_elf_matches_tested": "PASSED",
+  "iso_sha256": "2765b41fb9b58d99b5663d1ca2e7842aa4592170dfe80169cf64f3470ebf1144",
+  "kernel_sha256": "38ff65833f1c934ffe13360133aaee0d5158637195f22d74f2274ddedc4ef17b",
+  "modified_and_new_files": 30
+}

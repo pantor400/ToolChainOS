@@ -1,0 +1,37 @@
+# Artefactos de compilación (make, make iso, make inspect)
+/build/
+/entrega/
+
+# Imágenes de disco y capturas generadas por las pruebas
+*.img
+*.iso
+*.elf
+*.o
+*.d
+*.map
+
+# Excepción: ELF de inspección que sella MANIFEST_SHA256.json
+!artifacts/**/iso-inspeccion/kernel.elf
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Entornos y editores
+.idea/
+.vscode/
+*.swp
+*~
+
+# Sesiones y sockets de QMP
+*.sock
+
+# Logs locales de compilación (las evidencias de artifacts/ sí se versionan)
+/build/*.log
+/*.log
+
+# Metadatos de sistemas de archivos ajenos
+*:Zone.Identifier
+.DS_Store
+Thumbs.db

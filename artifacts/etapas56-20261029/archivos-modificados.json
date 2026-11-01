@@ -1,0 +1,157 @@
+[
+  {
+    "path": "CHANGELOG.md",
+    "status": "modified",
+    "sha256": "c8a73fb778b2017e7cbf3d1fde0cf66384f12a762c8e6c164ed340eb4d31c7b2"
+  },
+  {
+    "path": "LEEME_ENTREGA.md",
+    "status": "modified",
+    "sha256": "cf675c0cc34c684202c576ac1e47f618e1a784fa8ec2155dd663fa2c42dbd8b8"
+  },
+  {
+    "path": "Makefile",
+    "status": "modified",
+    "sha256": "ee79fc9fa3a5059eaad9c28e6e057ce853c7dde6de86b43c159b9de7e884f6d0"
+  },
+  {
+    "path": "README.md",
+    "status": "modified",
+    "sha256": "b09b7ab9521135642452871130770b656656e7ea4bc37e185e559882a43c8ebd"
+  },
+  {
+    "path": "docs/AUDITORIA_ETAPAS56.md",
+    "status": "new",
+    "sha256": "fa73cfe125eaec4c4e092ea91229e28b14ff0f1826ba492fc2a4e7549f02f3f7"
+  },
+  {
+    "path": "docs/AVANCE_ETAPAS56.md",
+    "status": "new",
+    "sha256": "0774467b3cd6b121d98e930833fabfcb96d9975adeeb4b4303f8e49e1aaa68bc"
+  },
+  {
+    "path": "docs/CIERRE_ETAPAS56.md",
+    "status": "new",
+    "sha256": "954804364ca8c17945a9dc1cfecebe5f3c67c771aaeaf4cc2ccfe46a0b803ce3"
+  },
+  {
+    "path": "docs/GUIA_DEMOSTRACION_ETAPAS56.md",
+    "status": "new",
+    "sha256": "3970a24be686c4509b675cef31e021de10c3eb7595f8a224ae574b36f42559ab"
+  },
+  {
+    "path": "docs/INFORME_ACADEMICO_ETAPAS56.docx",
+    "status": "new",
+    "sha256": "362c92a4d47806a1210e5bac85f3bfd336ca3daec40dfb20995c25dcf1b01604"
+  },
+  {
+    "path": "docs/etapas56-diagramas/contexto.png",
+    "status": "new",
+    "sha256": "009ae030921161c573a1563767bc4f87b3a7c444702627874ac62f1585bd28ab"
+  },
+  {
+    "path": "docs/etapas56-diagramas/estados.png",
+    "status": "new",
+    "sha256": "8a99c18465f013bb46432efcf8edaf6a25d4ea10d7c3cb4c38ac0df78fd92d55"
+  },
+  {
+    "path": "docs/etapas56-diagramas/memoria.png",
+    "status": "new",
+    "sha256": "006398fe57036fd1a8aa0d9d6dbd48719ea6a64a5522b9f33c77657c92e3ac09"
+  },
+  {
+    "path": "docs/etapas56-diagramas/round-robin.png",
+    "status": "new",
+    "sha256": "fce73a35e02454162f579d2249cb033fb496dd75df8f8e9a1cbfa1a576eace1e"
+  },
+  {
+    "path": "include/heap.h",
+    "status": "new",
+    "sha256": "29688ad5661112c073b50ecf67a6a7fee98f23e38714c30205998de18116af85"
+  },
+  {
+    "path": "include/pmm.h",
+    "status": "modified",
+    "sha256": "d32c6e6f76b378c11534ac226da7da6fed530629acfe8734fbb2f5546d63f84b"
+  },
+  {
+    "path": "include/tasks.h",
+    "status": "modified",
+    "sha256": "a3f90e45c4489d647536f36d5132dd202e3201a3820333bdf7600e8c47b1d102"
+  },
+  {
+    "path": "scripts/create_academic_report.py",
+    "status": "new",
+    "sha256": "8ac0563594059413da9286587210993975663d32f3456394a44d31b9d831aa54"
+  },
+  {
+    "path": "scripts/package_etapas56.py",
+    "status": "new",
+    "sha256": "543b80acb9e6399159225d92d785c8076283384848a446a2e42e34ffe11a73eb"
+  },
+  {
+    "path": "scripts/qemu_test.py",
+    "status": "modified",
+    "sha256": "f4ee1be71ea3399b62a3f244a24648efa294c752a2819435a248c3dba648c57e"
+  },
+  {
+    "path": "scripts/test_all.py",
+    "status": "modified",
+    "sha256": "86b70b24ae2a7871075122d29cab91b619bfd39dee3d111b3195fc549b9a5d8e"
+  },
+  {
+    "path": "scripts/test_core.py",
+    "status": "modified",
+    "sha256": "02696ae21c709d80690e54adaa03990f26e7c3110c490d9c47c528cf088eaa93"
+  },
+  {
+    "path": "scripts/test_memory_host.c",
+    "status": "new",
+    "sha256": "94e0478a61ca0405ecb255526ea703f562f8f41aafc975b56b3f859c53308ab0"
+  },
+  {
+    "path": "scripts/test_memory_scheduler.py",
+    "status": "new",
+    "sha256": "9237e827206734583ca282c6e58ff272fdd61ed663874a67eca49324b3103e8d"
+  },
+  {
+    "path": "scripts/test_presentation.py",
+    "status": "modified",
+    "sha256": "178d6719e8ff0ec2d17718aabc60f5984a626395f812ee1382482b5101034b84"
+  },
+  {
+    "path": "scripts/test_scheduler_host.c",
+    "status": "new",
+    "sha256": "429a69cee1385b800c1936f21e72f35c8b80423f3b3b6fb214c01a922942c4e1"
+  },
+  {
+    "path": "scripts/validate_etapas56.py",
+    "status": "new",
+    "sha256": "42d8447622e7d48dae8055761038925844fdff1af1d6292263586d795d4f1a99"
+  },
+  {
+    "path": "src/context.asm",
+    "status": "modified",
+    "sha256": "8e612cdfb71c85fd790602b438dcba629f08ca6f42e256ffd82da4568ba8e0fc"
+  },
+  {
+    "path": "src/heap.c",
+    "status": "new",
+    "sha256": "22187e4f1ded5976d74fccaf5f85925f80b89aa7aa2e2e1cdc6c4b64f87fbfcd"
+  },
+  {
+    "path": "src/kernel.c",
+    "status": "modified",
+    "sha256": "64b1bb5ee292356117c654901be9d9a09f58502c0df2ec9d580c3024b567468f"
+  },
+  {
+    "path": "src/pmm.c",
+    "status": "modified",
+    "sha256": "731f8238f0a702067fb1231ca49d2aca5914d7bce39629b82edffcfcdd817199"
+  },
+  {
+    "path": "src/tasks.c",
+    "status": "modified",
+    "sha256": "d49ad149b24d902ab1920ccec2f3c025918141778d5dfeadfd9a76d894d4d823"
+  }
+]

@@ -1,0 +1,29 @@
+--- before/scripts/test_presentation.py
++++ after/scripts/test_presentation.py
+@@ -6,7 +6,7 @@
+ sock=Path('build/presentation-'+uuid.uuid4().hex[:8]+'.sock')
+ with Guest('v31-presentacion',['-qmp',f'unix:{sock},server=on,wait=off']) as g:
+     banner=g.transcript.decode('utf-8')
+-    for text in ['TOOLCHAIN OS V3.1 - SISTEMA OPERATIVO X86-64','C + NASM + LD + MAKE + LIMINE + QEMU',
++    for text in ['TOOLCHAIN OS V3.1 E56 - SISTEMA OPERATIVO X86-64','C + NASM + LD + MAKE + LIMINE + QEMU',
+                  'PARA CONSULTAR A LA IA: IA <PREGUNTA>','KERNEL_READY','OS> ']:
+         assert text in banner,text
+     assert 'PARCIAL' not in banner and '?' not in banner
+@@ -21,7 +21,7 @@
+                     result=json.loads(stream.readline())
+                     if 'error' in result:raise RuntimeError(result)
+                     if 'return' in result:break
+-    capture('inicio-v31.png')
++    capture('inicio-e56.png')
+     text=g.send('help')
+     required=['TECLADO [ES|US|1|2]','HELP','INFO','MEM','UPTIME','LIMPIAR','HALT','ECO','TEXTO','SUMA','COLOR','FONDO',
+        'LS / DIR','PWD','CD','MKDIR','CREAR','OPEN','EDIT','RM','RMDIR','REN','COPY','TREE',
+@@ -31,7 +31,7 @@
+        'TOUCH','CANCELAR','PARA USAR LA INTELIGENCIA ARTIFICIAL, ESCRIBE IA SEGUIDO DE TU PREGUNTA.',
+        'IA Que es un sistema operativo?','SERVIDOR OLLAMA Y PUENTE COM2 ACTIVOS']
+     for command in required:assert command in text,command
+-    capture('help-v31.png')
++    capture('help-e56.png')
+     g.send('suma 25 -8',['= 17'])
+ sock.unlink(missing_ok=True)
+ print(f'PASSED: bienvenida V3.1 ASCII, HELP con {len(required)} textos/sintaxis, marcadores y SUMA; dos capturas reales')

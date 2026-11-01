@@ -1,0 +1,100 @@
+
+CONFIGURACION DE TECLADO / KEYBOARD SETUP
+1. Español latinoamericano (Perú) [predeterminado]
+2. English - United States (US)
+Elija 1 o 2 y Enter. Sin respuesta: ES-LATAM en 3 segundos.
+
+TECLADO: ES-LATAM (PERU)
+PS/2: distribucion del kernel. SERIAL: UTF-8 del terminal anfitrion.
+FS MODE=RAM (SIN ATA)
+
+============================================================
+TOOLCHAIN OS V3.1 E56 - SISTEMA OPERATIVO X86-64
+BIENVENIDO AL LABORATORIO DE SISTEMAS OPERATIVOS
+C + NASM + LD + MAKE + LIMINE + QEMU
+KERNEL EDUCATIVO | ARCHIVOS | MEMORIA | TAREAS | PERSISTENCIA
+INTEGRACION IA: OLLAMA MEDIANTE PUENTE LINUX Y COM2
+PARA CONSULTAR A LA IA: IA <PREGUNTA>
+REQUIERE SERVIDOR OLLAMA Y PUENTE COM2 ACTIVOS.
+ESCRIBE HELP PARA VER TODOS LOS COMANDOS Y EL EDITOR.
+============================================================
+
+KERNEL_READY
+OS> eco año
+ESCRIBISTE: año
+OS> eco Perú
+ESCRIBISTE: Perú
+OS> eco programación
+ESCRIBISTE: programación
+OS> eco ¿Qué es un sistema operativo?
+ESCRIBISTE: ¿Qué es un sistema operativo?
+OS> eco áéíóú ÁÉÍÓÚ ñÑ üÜ ¡Hola!
+ESCRIBISTE: áéíóú ÁÉÍÓÚ ñÑ üÜ ¡Hola!
+OS> eco € “texto” — …
+ESCRIBISTE: € “texto” — …
+OS> eco Ω 汉字 🙂
+ESCRIBISTE: Ω 汉字 🙂
+OS> eco añ ño
+ESCRIBISTE: año
+OS> eco Perú ú
+ESCRIBISTE: Perú
+OS> eco 🙂  X
+ESCRIBISTE: X
+OS> eco X
+ESCRIBISTE: X
+OS> eco 
+ERROR: UTF-8 INVALIDO; LINEA DESCARTADA.
+OS> eco 
+ERROR: UTF-8 INVALIDO; LINEA DESCARTADA.
+OS> eco 
+ERROR: UTF-8 INVALIDO; LINEA DESCARTADA.
+OS> eco 
+ERROR: UTF-8 INVALIDO; LINEA DESCARTADA.
+OS> crear año Perú y programación
+ARCHIVO GUARDADO CON EXITO EN RAM (DISCO: VER PERSISTENCIA/FSSTATUS).
+OS> open año
+Perú y programación
+OS> edit año
+EDITOR 1023 BYTES UTF-8: texto agrega linea; :line N texto reemplaza, :del N, :clear, :show, :wq, :q
+Perú y programación
+EDIT> :clear
+EDIT> ¿Qué es un sistema operativo?
+EDIT> programacióx n
+EDIT> niñ Ñ
+EDIT> :wq
+ARCHIVO GUARDADO CON EXITO EN RAM (DISCO: VER PERSISTENCIA/FSSTATUS).
+OS> open año
+¿Qué es un sistema operativo?
+programación
+niÑ
+OS> edit año
+EDITOR 1023 BYTES UTF-8: texto agrega linea; :line N texto reemplaza, :del N, :clear, :show, :wq, :q
+¿Qué es un sistema operativo?
+programación
+niÑ
+EDIT> :clear
+EDIT> :q
+EDICION CANCELADA.
+OS> open año
+¿Qué es un sistema operativo?
+programación
+niÑ
+OS> edit límite
+EDITOR 1023 BYTES UTF-8: texto agrega linea; :line N texto reemplaza, :del N, :clear, :show, :wq, :q
+EDIT> ááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááá
+EDIT> ñ
+ERROR: LIMITE 1023 BYTES; SIN CAMBIOS.
+EDIT> :wq
+ARCHIVO GUARDADO CON EXITO EN RAM (DISCO: VER PERSISTENCIA/FSSTATUS).
+OS> ls
+CONTENIDO DE: /
+  [TXT] script (108 B)
+  [TXT] nota (80 B)
+  [TXT] año (51 B)
+  [TXT] límite (1023 B)
+OS> eco áááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááá
+ERROR: LINEA DEMASIADO LARGA; DESCARTADA.
+OS> suma 1 2
+1 + 2 = 3
+CALCULADO POR NASM, LLAMADO DESDE C.
+OS> 

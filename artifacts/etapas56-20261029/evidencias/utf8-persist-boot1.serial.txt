@@ -1,0 +1,41 @@
+
+CONFIGURACION DE TECLADO / KEYBOARD SETUP
+1. Español latinoamericano (Perú) [predeterminado]
+2. English - United States (US)
+Elija 1 o 2 y Enter. Sin respuesta: ES-LATAM en 3 segundos.
+
+TECLADO: ES-LATAM (PERU)
+PS/2: distribucion del kernel. SERIAL: UTF-8 del terminal anfitrion.
+FS SIN SNAPSHOT VALIDO: RAM INICIAL; SE GUARDA EN SIGUIENTE CAMBIO
+
+============================================================
+TOOLCHAIN OS V3.1 E56 - SISTEMA OPERATIVO X86-64
+BIENVENIDO AL LABORATORIO DE SISTEMAS OPERATIVOS
+C + NASM + LD + MAKE + LIMINE + QEMU
+KERNEL EDUCATIVO | ARCHIVOS | MEMORIA | TAREAS | PERSISTENCIA
+INTEGRACION IA: OLLAMA MEDIANTE PUENTE LINUX Y COM2
+PARA CONSULTAR A LA IA: IA <PREGUNTA>
+REQUIERE SERVIDOR OLLAMA Y PUENTE COM2 ACTIVOS.
+ESCRIBE HELP PARA VER TODOS LOS COMANDOS Y EL EDITOR.
+============================================================
+
+KERNEL_READY
+OS> mkdir Perú
+CARPETA CREADA CON EXITO.
+PERSISTENCIA OK GENERATION=1
+OS> crear Perú/niño Perú: año, programación, pingüino. ¿Qué? ¡Sí! ÁÉÍÓÚ Ñ Ü.
+ARCHIVO GUARDADO CON EXITO EN RAM (DISCO: VER PERSISTENCIA/FSSTATUS).
+PERSISTENCIA OK GENERATION=2
+OS> edit Perú/niño
+EDITOR 1023 BYTES UTF-8: texto agrega linea; :line N texto reemplaza, :del N, :clear, :show, :wq, :q
+Perú: año, programación, pingüino. ¿Qué? ¡Sí! ÁÉÍÓÚ Ñ Ü.
+EDIT> :clear
+EDIT> Perú: año, programación, pingüino. ¿Qué? ¡Sí! ÁÉÍÓÚ Ñ Ü.
+EDIT> Segunda línea: áéíóú ñ ü
+EDIT> :wq
+ARCHIVO GUARDADO CON EXITO EN RAM (DISCO: VER PERSISTENCIA/FSSTATUS).
+PERSISTENCIA OK GENERATION=3
+OS> ren Perú/niño año
+OPERACION OK.
+PERSISTENCIA OK GENERATION=4
+OS> 

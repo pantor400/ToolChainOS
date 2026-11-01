@@ -1,0 +1,11 @@
+{
+  "status": "PASSED",
+  "repeated_scheduler_runs": 13,
+  "new_threads": 39,
+  "actual_register_yield_probes": 156,
+  "independent_local_checks": 156,
+  "algorithm": "Round Robin cooperative",
+  "preemption": false,
+  "pmm_heap_recovery_each_run": true,
+  "shell_while_threads_alive": true
+}

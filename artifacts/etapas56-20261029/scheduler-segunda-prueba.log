@@ -1,0 +1,43 @@
+gcc -std=c11 -O2 -g -Wall -Wextra -Werror -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -mcmodel=kernel -mgeneral-regs-only -ffunction-sections -fdata-sections -MMD -MP -Iinclude -Ivendor/limine -c src/tasks.c -o build/tasks.o
+ld -nostdlib -static -z max-page-size=0x1000 --gc-sections -T linker.ld -Map=build/kernel.map -o build/kernel.elf build/ai_serial.o build/ata.o build/console.o build/cpp_runner.o build/editor.o build/fs.o build/glyph.o build/heap.o build/interrupts.o build/kernel.o build/keyboard.o build/keyboard_menu.o build/memory.o build/pmm.o build/storage.o build/tasks.o build/utf8.o build/cpu.o build/interrupt_stubs.o build/context.o /usr/lib/gcc/x86_64-linux-gnu/15/libgcc.a
+mkdir -p build/iso_root/boot/limine build/iso_root/EFI/BOOT
+cp build/kernel.elf build/iso_root/boot/kernel.elf
+cp limine.conf vendor/limine/limine-bios.sys vendor/limine/limine-bios-cd.bin vendor/limine/limine-uefi-cd.bin build/iso_root/boot/limine/
+cp vendor/limine/BOOTX64.EFI build/iso_root/EFI/BOOT/
+xorriso -as mkisofs -R -r -J -b boot/limine/limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table -hfsplus -apm-block-size 2048 --efi-boot boot/limine/limine-uefi-cd.bin -efi-boot-part --efi-boot-image --protective-msdos-label build/iso_root -o build/toolchain-os.iso
+xorriso 1.5.6 : RockRidge filesystem manipulator, libburnia project.
+
+Drive current: -outdev 'stdio:build/toolchain-os.iso'
+Media current: stdio file, overwriteable
+Media status : is blank
+Media summary: 0 sessions, 0 data blocks, 0 data,  947g free
+Added to ISO image: directory '/'='/home/user/proyectos/ToolchainOS/build/qa-etapas56/build/iso_root'
+xorriso : UPDATE :      10 files added in 1 seconds
+xorriso : UPDATE :      10 files added in 1 seconds
+ISO image produced: 2071 sectors
+Written to medium : 2071 sectors at LBA 0
+Writing to 'stdio:build/toolchain-os.iso' completed successfully.
+
+build/limine bios-install build/toolchain-os.iso
+Physical block size of 512 bytes.
+Installing to GPT. Logical block size of 512 bytes.
+Secondary header at LBA 0x205b.
+Secondary header valid.
+GPT partition NOT specified. Attempting GPT embedding.
+New maximum count of partition entries: 44.
+Stage 2 to be located at 0x3e00 and 0x407400.
+Reminder: Remember to copy the limine-bios.sys file in either
+          the root, /boot, /limine, or /boot/limine directories of
+          one of the partitions on the device, or boot will fail!
+Limine BIOS stages installed successfully!
+python3 scripts/check_elf.py build/kernel.elf
+OK: ELF64 x86-64, entrada higher-half, sin simbolos pendientes, sin RWX y con marcadores Limine.
+Traceback (most recent call last):
+  File "/home/user/proyectos/ToolchainOS/build/qa-etapas56/scripts/test_memory_scheduler.py", line 44, in <module>
+    g.buffer.clear();g.until('TERMINATED=3\n',5)
+                     ~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/proyectos/ToolchainOS/build/qa-etapas56/scripts/qemu_test.py", line 16, in until
+    if time.monotonic()>end: raise TimeoutError(self.buffer.decode(errors='replace'))
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TimeoutError: SCHEDTEST PASSED TRACE=ABCABCABCABC REG_PROBES=12 LOCALS=12 PMM_RESTORED=1 HEAP_RESTORED=1 TERMINATED=3
+

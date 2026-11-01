@@ -1,0 +1,30 @@
+Traceback (most recent call last):
+  File "/home/user/proyectos/ToolchainOS/build/qa-etapas56/scripts/test_memory_scheduler.py", line 24, in <module>
+    g.send('suma 19 23',['= 42'])
+    ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/proyectos/ToolchainOS/build/qa-etapas56/scripts/qemu_test.py", line 29, in send
+    self.until(prefix,timeout)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/home/user/proyectos/ToolchainOS/build/qa-etapas56/scripts/qemu_test.py", line 16, in until
+    if time.monotonic()>end: raise TimeoutError(self.buffer.decode(errors='replace'))
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TimeoutError: THREAD_ENTRY TID=2 LOCAL=0xFFFF80000005EFA8
+RR A STEP=0 TID=2
+sTHREAD_ENTRY TID=3 LOCAL=0xFFFF800000062FA8
+RR B STEP=0 TID=3
+uTHREAD_ENTRY TID=4 LOCAL=0xFFFF800000066FA8
+RR C STEP=0 TID=4
+mRR A STEP=1 TID=2
+aRR B STEP=1 TID=3
+ RR C STEP=1 TID=4
+1RR A STEP=2 TID=2
+9RR B STEP=2 TID=3
+ RR C STEP=2 TID=4
+2RR A STEP=3 TID=2
+3RR B STEP=3 TID=3
+
+19 + 23 = 42
+CALCULADO POR NASM, LLAMADO DESDE C.
+OS> RR C STEP=3 TID=4
+SCHEDTEST PASSED TRACE=ABCABCABCABC REG_PROBES=12 LOCALS=12 PMM_RESTORED=1 HEAP_RESTORED=1 TERMINATED=3
+
