@@ -31,6 +31,11 @@ __pycache__/
 /build/*.log
 /*.log
 
+# Salidas efímeras de las pruebas (las evidencias viven en subcarpetas datadas)
+/artifacts/*.png
+/artifacts/*.json
+/artifacts/*.txt
+
 # Metadatos de sistemas de archivos ajenos
 *:Zone.Identifier
 .DS_Store
