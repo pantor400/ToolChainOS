@@ -1,24 +1,58 @@
-# Toolchain OS — kernel x86-64 didáctico (Etapas 5 y 6)
+# Toolchain OS
 
-Kernel **freestanding** de 64 bits escrito en C11 y NASM, sin librería estándar ni
-dependencias en tiempo de ejecución, que arranca en BIOS y UEFI mediante Limine y se
-ejecuta en QEMU. Incluye consola interactiva por teclado y serie, sistema de archivos
-en RAM con persistencia ATA, planificación Round Robin cooperativa, memoria física y
-heap propios, texto UTF-8 con teclado bilingüe y un canal de inteligencia artificial
-hacia Ollama por puerto serie.
+**Un sistema operativo x86-64 escrito desde cero.** Kernel propio en C11 y NASM, sin
+librería estándar: memoria física, heap, tareas con cambio de contexto, archivos que
+sobreviven al reinicio, texto UTF-8 y un canal de conversación con una IA local.
+Arranca en BIOS y UEFI desde una ISO híbrida y se ejecuta en QEMU.
+
+<!-- Badge de CI: requiere que el repositorio se llame pantor400/ToolchainOS y la rama main. -->
+[![CI](https://github.com/pantor400/ToolchainOS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pantor400/ToolchainOS/actions/workflows/ci.yml)
+[![Licencia](https://img.shields.io/badge/licencia-MIT-brightgreen.svg)](LICENSE)
+[![Arquitectura](https://img.shields.io/badge/arquitectura-x86--64-blue.svg)](#5-subsistemas)
+[![Arranque](https://img.shields.io/badge/arranque-BIOS%20%2B%20UEFI-8957e5.svg)](#2-compilar-y-ejecutar)
+[![Pruebas](https://img.shields.io/badge/pruebas-19%2F19%20PASSED-success.svg)](artifacts/etapas56-20261029/results.json)
+[![QEMU](https://img.shields.io/badge/emulador-QEMU-orange.svg)](#2-compilar-y-ejecutar)
+
+![Consola de Toolchain OS al arrancar](artifacts/etapas56-20261029/evidencias/inicio-e56.png)
+
+## Qué puedes hacer con él
+
+| | |
+|---|---|
+| **Arrancar sin sistema anfitrión** | ISO híbrida BIOS/UEFI con Limine 8.x: sin GRUB, sin libc y sin dependencias en tiempo de ejecución |
+| **Administrar su propia memoria** | PMM por bitmaps hasta 4 GiB y heap por arenas con división, fusión y alineación de 16 bytes |
+| **Guardar archivos entre reinicios** | FS en RAM de 64 nodos con snapshots ATA alternados, generación y recuperación ante corrupción |
+| **Ejecutar tareas concurrentes** | 16 PCB/TCB, pilas de 16 KiB con canario y Round Robin cooperativo con contexto en NASM |
+| **Hablar UTF-8 de verdad** | Validación estricta, teclado ES-LATAM/US con teclas muertas y glifos españoles en framebuffer |
+| **Conversar con una IA local** | Protocolo binario TC/1 por COM2 hacia Ollama, probado extremo a extremo con UTF-8 |
+
+> **Estado:** 19 de 19 grupos automatizados PASSED, 0 FAILED, 0 BLOCKED, 0 SKIPPED.
+> La evidencia reproducible está en
+> [`artifacts/etapas56-20261029/`](artifacts/etapas56-20261029/) (`results.json` y los
+> registros `*-final.log` de cada grupo).
 
 | Dato | Valor |
 |---|---|
 | Arquitectura | x86-64, higher-half `0xffffffff80000000` |
 | Arranque | Limine 8.x (BIOS y UEFI), ISO híbrida |
 | Emulador de referencia | QEMU `qemu-system-x86_64`, máquina `q35`, 256 MiB, 2 vCPU |
-| Tamaño del kernel | ~380 KiB ELF (`build/kernel.elf`), sin secciones RWX |
+| Tamaño del kernel | ~378 KiB ELF (`build/kernel.elf`), sin secciones RWX |
 | Estado de validación | **19 de 19 grupos automatizados PASSED**, 0 FAILED/BLOCKED/SKIPPED |
 | Licencia | MIT (`LICENSE`) |
 
-La evidencia reproducible de esa validación está en
-[`artifacts/etapas56-20261029/`](artifacts/etapas56-20261029/) (`results.json` y los
-registros `*-final.log` de cada grupo).
+## Índice
+
+- [1. Requisitos](#1-requisitos)
+- [2. Compilar y ejecutar](#2-compilar-y-ejecutar)
+- [3. Teclado](#3-teclado)
+- [4. Comandos de la shell](#4-comandos-de-la-shell)
+- [5. Subsistemas](#5-subsistemas)
+- [6. Arquitectura](#6-arquitectura)
+- [7. Estructura del repositorio](#7-estructura-del-repositorio)
+- [8. Pruebas](#8-pruebas)
+- [9. Límites conocidos](#9-límites-conocidos)
+- [10. Documentación](#10-documentación)
+- [11. Entrega e integridad](#11-entrega-e-integridad)
 
 ## 1. Requisitos
 
@@ -47,6 +81,16 @@ El `Makefile` no requiere un cross-compilador: usa `gcc` del sistema con
 `make CROSS=x86_64-elf-`.
 
 ## 2. Compilar y ejecutar
+
+Tres comandos y el sistema arranca:
+
+```bash
+git clone https://github.com/pantor400/ToolchainOS.git
+cd ToolchainOS
+make run        # compila el kernel, genera la ISO y arranca QEMU
+```
+
+Objetivos disponibles:
 
 ```bash
 make            # build/kernel.elf
@@ -146,6 +190,8 @@ python3 scripts/ai_bridge.py --serial /dev/pts/N # puente COM2 <-> Ollama
 make run-ai                                      # QEMU con el puerto conectado
 ```
 
+![HELP del sistema con las cuatro categorías de comandos](artifacts/etapas56-20261029/evidencias/help-e56.png)
+
 ## 5. Subsistemas
 
 | Módulo | Archivos | Responsabilidad |
@@ -229,6 +275,11 @@ Pruebas que arrancan QEMU:
 | `make test-ai-bridge` | Transporte TC/1 contra un mock |
 | `make test-ai-real` | IA real contra Ollama |
 | `make test-ai-utf8` | Pregunta en UTF-8 extremo a extremo |
+
+El workflow [`ci.yml`](.github/workflows/ci.yml) repite en GitHub Actions la
+compilación, la verificación del ELF y las pruebas de host (PMM, heap, UTF-8,
+teclado, glifos, FS y planificador), además de publicar la ISO como artefacto. El
+badge del encabezado refleja ese estado en `main`.
 
 Validación y empaquetado del cierre:
 
