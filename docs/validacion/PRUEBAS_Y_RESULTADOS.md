@@ -85,3 +85,108 @@ Kernel SHA256: 17ad43a34a9539fb16f5cd3b3c09ebc3fbd72b0c1afe4e47e841e0412f0e0f99
 ISO SHA256: 25016b61255228b3e9e5e29b8c2cf94cf84215a1caf2f5c4415858a0804b6ba7
 version.json enumera fuentes, cabeceras, Makefile, linker y dependencia Limine.
 El ZIP nuevo se verifica por manifiesto/CRC y contiene el mismo kernel/ISO probados.
+Los dos hashes anteriores corresponden al cierre V3.1; las comprobaciones de la
+sección siguiente son posteriores y se registran en `artifacts/`.
+
+## Hoja de cálculo en el escritorio y apagado nativo
+Estas pruebas se ejecutan sobre el árbol actual y cubren la ofimática nativa y el
+apagado desde el propio kernel, sin hipervisor anfitrión.
+
+| Objetivo | Comprueba |
+|---|---|
+| `make test-gui` | Hoja de cálculo: `hoja.elf: HOJA 8X16 LISTA ABI=5`, apertura de `hoja.csv`, fórmula `=b1-a1` → `hoja.elf: FORMULA C1 =b1-a1 -> 2`, edición de celda (`hoja.elf: CELDA C2 10`) y guardado (`hoja.elf: GUARDADO /hoja.csv`) |
+| `make test-apagar` | Escenario de consola: `APAGAR` → `POWER: APAGADO SOLICITADO (COMANDO APAGAR)`, `POWER: S5 ENVIADO` y evento QMP `SHUTDOWN` con `guest: true` |
+| `python3 scripts/test_presentation.py` | El HELP publica `GUI HOJA` y `APAGAR`, y ya no enumera `VMX` ni `GUI HIPERVISOR` |
+
+Comando y resultado esperado:
+
+```bash
+make test-apagar
+# PASSED: APAGAR apaga el equipo por ACPI S5
+```
+
+El evento `SHUTDOWN` de QMP es la prueba de que el firmware atendió el S5; el
+registro serie solo confirma que el kernel envió la orden. QEMU se arranca con
+`-no-shutdown`, de modo que la máquina queda detenida y el proceso sigue vivo
+para que la prueba pueda leer el evento.
+
+## USB, arranque desde pendrive y Secure Boot
+
+Fecha de ejecución: 2026-11-04. QEMU `q35` con `-device qemu-xhci` y una imagen
+cruda de 32 MiB expuesta como `usb-storage`.
+
+| Objetivo | Comprueba | Resultado |
+|---|---|---|
+| `make test-usb` | FAT32 con etiqueta `PRUEBAUSB`, `USB LISTAR`, `USB VER`, `USB IMPORTAR` + `OPEN` del archivo copiado, `USB ESCRIBIR` y `USB LEER` de un sector, persistencia tras reiniciar, aviso LUKS, medio `readonly`, controladora sin dispositivos y arranque del propio sistema desde el pendrive por BIOS y por UEFI | PASSED |
+| `make test-secureboot` | Control con OVMF sin Secure Boot (`KERNEL_READY` en 5.0 s) y rechazo del cargador sin firmar con `OVMF_CODE.secboot.fd` (sin `KERNEL_READY` en 20 s) | PASSED |
+| `make usb-lista` | Enumera unidades extraíbles con `lsblk`; sin unidades, informa y no escribe | PASSED |
+| `python3 scripts/escribir_usb.py verificar build/toolchain-os.iso` | Firma `0x55AA` del sector 0 y presencia del cargador Limine en el primer MiB | PASSED |
+
+Salida resumida de `make test-usb`:
+
+```text
+OK  arranque del kernel
+OK  FAT32 montado en el pendrive
+OK  etiqueta de volumen PRUEBAUSB
+OK  puerto USB conectado
+OK  listado FAT con HOLA.TXT
+OK  contenido leido del USB
+OK  importado al FS en RAM
+OK  archivo importado legible
+OK  escritura SCSI de un sector
+OK  lectura del sector escrito
+OK  el sector escrito sobrevive al reinicio
+OK  aviso de medio cifrado sin descifrar
+OK  el medio cifrado no se monta ni se descifra
+OK  medio de solo lectura detectado
+OK  escritura rechazada sin tocar el medio
+OK  controladora sin dispositivos
+--- Arranque BIOS desde pendrive ---
+OK  arranque del kernel
+OK  Arranque BIOS desde pendrive: kernel arrancado y medio de 27412 sectores montado
+OK  la particion EFI del pendrive se lista
+--- Arranque UEFI desde pendrive ---
+OK  arranque del kernel
+OK  Arranque UEFI desde pendrive: kernel arrancado y medio de 27412 sectores montado
+OK  la particion EFI del pendrive se lista
+USB: TODAS LAS COMPROBACIONES SUPERADAS
+```
+
+Salida resumida de `make test-secureboot`:
+
+```text
+CONTROL: ISO normal con OVMF sin Secure Boot
+OK  KERNEL_READY en 5.0 s (referencia de arranque)
+FIRMA: cargador con claves propias
+OMITIDO: falta toolchain-os-secureboot.iso (make secureboot-claves && make secureboot-iso)
+RECHAZO: ISO sin firmar con OVMF y Secure Boot activo
+OK  el firmware rechazo el cargador sin firmar (sin KERNEL_READY en 20 s)
+SECURE BOOT: COMPROBACIONES SUPERADAS
+```
+
+Notas de alcance:
+
+- En este equipo no está instalado `sbsigntools`, así que `make secureboot-iso`
+  no puede generar la ISO firmada: `scripts/secure_boot.py` lo detecta, explica
+  el paquete que falta y se detiene. La clave y el certificado propios sí se
+  generan (`make secureboot-claves`), y la política del firmware queda
+  demostrada por el caso de rechazo.
+- Para completar el arranque firmado hay que inscribir `build/secureboot/db.crt`
+  (MOK en un equipo real o KeyTool.efi en OVMF) y repetir
+  `python3 scripts/test_secureboot.py --firmado` (o `--vars ARCHIVO` con un
+  `OVMF_VARS` que ya tenga la clave).
+- Los casos de `test_usb.py` que necesitan `sfdisk`, `mkfs.vfat` o `mcopy` se
+  omiten con aviso si el anfitrión no los tiene; el resto se ejecuta igual.
+- El arranque desde pendrive usa la ISO híbrida copiada como `usb-storage`
+  (`-boot c`, sin unidad de CD) y la ejecuta Limine en BIOS y en UEFI. El medio
+  montado es el propio pendrive: 27412 sectores y la partición EFI del ISO.
+- Con OVMF la controladora xHCI queda con el BAR en `0x7000000000`, por encima de
+  4 GiB. `mmio_map()` lo pagina con el mapa directo del HHDM (`pmm_hhdm()`), no
+  con `pmm_ptr()`, que solo cubre RAM baja; sin ese cambio el arranque UEFI
+  abortaba en `USB: BAR MMIO NO MAPEABLE`.
+- El montaje reconoce MBR y GPT: cabecera en LBA 1 (LBA de la tabla en el offset
+  72, número de entradas en el 80), GUID de la ESP y de datos de Microsoft/Linux
+  y, como respaldo, cualquier partición GPT cuyo sector 0 tenga un BPB FAT válido.
+- `make test-all` incluye ahora los grupos `usb` y `secureboot` además de los 18
+  históricos del cierre V3.1; ambos se ejecutaron por separado con PASSED. No se
+  reescribieron `artifacts/results.json` ni las evidencias anteriores.

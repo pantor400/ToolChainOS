@@ -3,9 +3,9 @@ import os, select, subprocess, time
 from pathlib import Path
 import qemu_config
 class Guest:
-    def __init__(self, name, extra=(), machine='q35'):
+    def __init__(self, name, extra=(), machine='q35', iso='build/toolchain-os.iso'):
         self.name=name; self.buffer=bytearray(); self.transcript=bytearray()
-        command=(qemu_config.base(machine=machine, iso='build/toolchain-os.iso')
+        command=(qemu_config.base(machine=machine, iso=iso)
             + ['-nic','none'] + qemu_config.display('none') + qemu_config.serial_stdio()
             + list(extra))
         self.q=subprocess.Popen(command,

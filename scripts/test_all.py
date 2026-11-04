@@ -22,6 +22,8 @@ steps=[
  ('ai-transport-mock',[['python3','scripts/test_ai.py']],['qemu-system-x86_64']),
  ('ai-agent',[['python3','scripts/test_agent.py']],['qemu-system-x86_64']),
  ('uefi',[['python3','scripts/test_uefi.py']],['qemu-system-x86_64']),
+ ('usb',[['python3','scripts/test_usb.py']],['qemu-system-x86_64','sfdisk','mkfs.vfat','mcopy']),
+ ('secureboot',[['python3','scripts/test_secureboot.py']],['qemu-system-x86_64']),
  ('ai-utf8-real',[['python3','scripts/test_ai_utf8.py']],['qemu-system-x86_64']),
  ('ai-real',[['python3','scripts/test_ai_real.py']],['qemu-system-x86_64'])]
 Path('artifacts').mkdir(exist_ok=True);results=[]

@@ -2,7 +2,7 @@
 
 /* CPUID devuelve cuatro registros generales; -mgeneral-regs-only permite
  * usarlo sin tocar SSE ni la FPU. */
-static void cpuid(uint32_t leaf, uint32_t sub, uint32_t out[4]) {
+void cpu_cpuid(uint32_t leaf, uint32_t sub, uint32_t out[4]) {
     uint32_t a = 0, b = 0, c = 0, d = 0;
     __asm__ volatile("cpuid" : "=a"(a), "=b"(b), "=c"(c), "=d"(d)
                              : "a"(leaf), "c"(sub));
@@ -19,7 +19,7 @@ void cpu_vendor(char *out, size_t capacity) {
     if (!out || !capacity) return;
     if (capacity < 13) { out[0] = 0; return; }
     uint32_t regs[4];
-    cpuid(0, 0, regs);
+    cpu_cpuid(0, 0, regs);
     /* EBX, EDX, ECX contienen los 12 bytes del fabricante. */
     copy_registers(out, &regs[1], 3);
     out[12] = 0;
@@ -29,12 +29,12 @@ void cpu_brand(char *out, size_t capacity) {
     if (!out || !capacity) return;
     out[0] = 0;
     uint32_t regs[4];
-    cpuid(0x80000000u, 0, regs);
+    cpu_cpuid(0x80000000u, 0, regs);
     if (regs[0] < 0x80000004u) return;      /* sin cadena de marca */
     char raw[49];
     size_t used = 0;
     for (uint32_t leaf = 0x80000002u; leaf <= 0x80000004u; leaf++) {
-        cpuid(leaf, 0, regs);
+        cpu_cpuid(leaf, 0, regs);
         for (int i = 0; i < 4; i++)
             for (int k = 0; k < 4; k++) raw[used++] = (char)((regs[i] >> (k * 8)) & 0xff);
     }
@@ -48,7 +48,7 @@ void cpu_brand(char *out, size_t capacity) {
 
 unsigned cpu_cores(void) {
     uint32_t regs[4];
-    cpuid(1, 0, regs);
+    cpu_cpuid(1, 0, regs);
     unsigned count = (regs[1] >> 16) & 0xffu;   /* EBX[23:16]: procesadores logicos */
     return count ? count : 1;
 }

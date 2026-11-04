@@ -23,6 +23,13 @@ Makefile   text
 *.sys      binary
 *.o        binary
 
+# Invitado Linux: kernel e initramfs son binarios y no llevan extension.
+vendor/guest/vmlinuz-virt    binary
+vendor/guest/initramfs-virt  binary
+
+# Personalidad Linux: el BusyBox descargado es un ELF estatico sin extension.
+vendor/linux-bin/busybox.static  binary
+
 # Evidencias: conservar los bytes exactos (registros con CRLF y hashes sellados)
 artifacts/** -text
 

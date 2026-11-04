@@ -85,7 +85,7 @@ static const dock_item_t dock_items[] = {
     {GUI_ICON_MONITOR, "Sistema", WIN_SYSTEM},
     {GUI_ICON_FOLDER, "Archivos", WIN_FILES},
     {GUI_ICON_GLOBE, "Red", WIN_NET},
-    {GUI_ICON_CHIP, "Entrada", WIN_INPUT},
+    {GUI_ICON_TERMINAL, "Entrada", WIN_INPUT},
     {GUI_ICON_IMAGE, "Imagenes", WIN_IMAGES},
     {GUI_ICON_PLAY, "Apps", WIN_APPS},
 };
@@ -1311,7 +1311,7 @@ static void draw_window(const gui_window_t *window) {
              window->kind == WIN_IMAGES ? GUI_ICON_IMAGE :
              window->kind == WIN_NET ? GUI_ICON_GLOBE :
              window->kind == WIN_APPS ? GUI_ICON_PLAY :
-             window->kind == WIN_INPUT ? GUI_ICON_CHIP : GUI_ICON_MONITOR,
+             window->kind == WIN_INPUT ? GUI_ICON_TERMINAL : GUI_ICON_MONITOR,
              x + margin, y + (title_height - icon_size) / 2, icon_size,
              focused ? palette.accent_dim : palette.accent);
     gui_text(x + margin + icon_size + margin / 2,

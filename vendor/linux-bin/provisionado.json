@@ -1,0 +1,10 @@
+{
+  "alpine": "3.24",
+  "paquete": "1.37.0-r31",
+  "archivos": {
+    "busybox.static": {
+      "bytes": 1038696,
+      "sha256": "1690ed6db71fa35621537580135deb8de4f55f30a50d9d591050256e334cd8b9"
+    }
+  }
+}

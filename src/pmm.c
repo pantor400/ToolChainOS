@@ -12,7 +12,20 @@ static uint64_t end_of(struct limine_memmap_entry *e){
     return e->length>PMM_LIMIT-e->base?PMM_LIMIT:e->base+e->length;
 }
 void *pmm_ptr(uint64_t p){return p<PMM_LIMIT&&offset<=UINT64_MAX-p?(void*)(offset+p):0;}
+uint64_t pmm_hhdm(void){return offset;}
 int pmm_is_usable(uint64_t p){return usable&&p%PMM_PAGE==0&&p/PMM_PAGE<pages&&bit(usable,p/PMM_PAGE);}
+int pmm_map_covers(uint64_t base,uint64_t length){
+    if(!memory_map||!length||base>=PMM_LIMIT)return 0;
+    uint64_t end=base+length;
+    if(end<base)return 0;
+    for(uint64_t i=0;i<memory_map->entry_count;i++){
+        struct limine_memmap_entry *e=memory_map->entries[i];
+        if(!e||!e->length||base<e->base)continue;
+        uint64_t entry_end=end_of(e);
+        if(end<=entry_end)return 1;
+    }
+    return 0;
+}
 void pmm_init(struct limine_memmap_response *map,uint64_t hhdm){
     usable=busy=0;pages=managed=allocated=metadata=0;hint=1;offset=hhdm;memory_map=map;
     if(!map||!map->entries||!hhdm||hhdm>UINT64_MAX-PMM_LIMIT)return;

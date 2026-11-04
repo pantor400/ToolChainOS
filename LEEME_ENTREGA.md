@@ -28,6 +28,15 @@ OLLAMA_MODEL=qwen2.5:0.5b OLLAMA_URL=http://127.0.0.1:11434 python3 scripts/run_
 Dentro: IA STATUS; IA ¿Qué es un sistema operativo?; IA CANCEL.
 No se distribuyen servicio ni pesos de Ollama. No hay descarga automática.
 
+BusyBox lo ejecuta el kernel propio, con su personalidad Linux:
+~~~bash
+make linux-bin    # una vez: descarga el binario estatico de Alpine
+make run-linux    # ISO variante; dentro, LINUX <applet> o LS/OPEN/TREE delegados
+~~~
+Todo ocurre dentro de ToolchainOS: no se arranca otro sistema operativo. El kernel
+atiende las llamadas al sistema del binario y devuelve el control a la shell.
+Detalle: README, sección 12 y vendor/linux-bin/ORIGEN.md.
+
 Evidencia automatizada: 18 grupos superados, incluyendo español/inglés por PS/2
 emulado, serial UTF-8, editor/Backspace, persistencia y Ollama real con tildes.
 No se presenta como prueba humana de un teclado físico.

@@ -1,6 +1,7 @@
 #include "interrupts.h"
 #include "console.h"
 #include "elf_loader.h"
+#include "linux_abi.h"
 #include "mouse.h"
 #include "io.h"
 #include "util.h"
@@ -34,6 +35,15 @@ void interrupt_dispatch(struct frame *f){
         if(f->vector>=40)outb(0xa0,0x20);
         outb(0x20,0x20);
         return;
+    }
+    /* Un binario Linux faulty se descarta igual que una app: la shell sigue
+     * viva y el PMM recupera lo asignado al desenrollar su pila. */
+    if(linux_busy()){
+        console_write("\nLINUX EXCEPTION VECTOR=");console_dec(f->vector);console_write(" ERROR=");console_hex(f->error);
+        console_write(" RIP=");console_hex(f->rip);
+        if(f->vector==14){uint64_t cr2;__asm__ volatile("mov %%cr2,%0":"=r"(cr2));console_write(" CR2=");console_hex(cr2);}
+        console_write(" PROGRAMA ABORTADO\n");
+        linux_abort();
     }
     /* Una aplicacion ELF faulty no debe detener el sistema: se descarta su
      * pila y se vuelve al bucle de la interfaz con el codigo de error. */

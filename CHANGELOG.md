@@ -256,3 +256,170 @@ del workflow (ISO, check_elf, PMM/heap, UTF-8, planificador, py_compile y
 protocolo TC/1) se repitieron en local: todos pasan. Las acciones suben a
 `actions/checkout@v7` y `actions/upload-artifact@v7` para salir de Node 20, que
 el runner ya solo mantiene por compatibilidad forzada a Node 24.
+
+## 2026-11-04 Invitado Linux de compatibilidad para LibreOffice
+El kernel sigue sin modo usuario, paginación ni syscalls, así que no ejecuta
+binarios de terceros. Para abrir el ecosistema Linux se usa el protocolo `linux`
+que ya implementa Limine 8.7: la ISO incorpora un kernel Alpine 6.18.60-virt y su
+initramfs, y `limine.conf` gana la entrada `Modo compatibilidad: Linux +
+LibreOffice`. `make guest` aprovisiona el invitado con podman sin privilegios
+(Alpine 3.24 + LibreOffice + Xorg + i3) y lo empaqueta con `mkfs.ext4 -d` en
+`vendor/guest/rootfs.img`; `make iso-guest` genera una variante con
+`default_entry: 2` para arrancarlo sin teclas. `scripts/guest/toolchain-init` es
+el PID 1 del invitado: monta `proc/sys/devtmpfs`, anuncia hitos por `ttyS0`
+(`GUEST: init start`, `X up`, `session ready`) y lanza Xorg con `modesetting`
+sobre el framebuffer del firmware más LibreOffice Writer maximizado.
+`make test-guest` verifica la ISO y el arranque completo con captura QMP. La ISO
+principal no cambia de comportamiento: sin invitado aprovisionado se genera igual
+y `timeout: 0` sigue arrancando ToolchainOS al instante. Los binarios de terceros
+(vmlinuz, initramfs, licencias y origen) viven en `vendor/guest/`; la imagen de
+2.5 GiB no se versiona y `update_manifest.py` la ignora. Validado en QEMU UEFI con
+KVM: LibreOffice Writer a 1280x720 con teclado y ratón PS/2.
+
+## 2026-11-04 Personalidad Linux: BusyBox ejecutado por el kernel propio
+El kernel gana la capacidad de atender un binario Linux real sin ceder el arranque.
+`src/linux_abi.c` y `src/linux_enter.asm` programan `EFER.SCE`, `STAR`, `LSTAR` y
+`FMASK` para que la instruccion `SYSCALL` entre en un manejador propio; habilitan
+SSE en `CR0`/`CR4` (el kernel se compila con `-mgeneral-regs-only` y musl usa
+`xmm`), arman la pila con `argc`/`argv`/`auxv` y despachan las llamadas que usan
+los applets: identidad, `brk`/`mmap`/`munmap`, tiempo, descriptores sobre el
+sistema de archivos en RAM (`getdents64`, `sendfile`, `ioctl` de terminal),
+senales vacias y `exit_group`. `elf.c` expone `elf_load_image`/`elf_free_image`
+para reutilizar el cargador PIE sin pasar por la GUI. La orden `LINUX <applet>`
+(E56) ejecuta el BusyBox de Alpine aprovisionado por `scripts/linux_bin.py` con
+podman; el binario viaja como modulo Limine en `build/toolchain-os-busybox.iso`,
+una variante que no altera la ISO entregada. `make test-linux-bin` verifica ISO,
+programacion de SYSCALL y los applets `echo`, `uname -m`, `ls /` y
+`cat /etc/hostname` con codigo 0. Los tres fallos que costo depurar quedan
+documentados por su sintoma: `call` en lugar de `jmp` al `_start` (argc leia la
+direccion de retorno), `#UD` por CR4.OSFXSR y perdida de `rdx`/`r8`/`r9`/`r10` al
+restaurar registros (syscall de Linux los conserva y el asm de musl solo marca
+`rcx`/`r11`). BusyBox (GPL-2.0) se ejecuta como programa separado: el kernel
+sigue siendo MIT y su origen, version y licencia viven en `vendor/linux-bin/`.
+
+## 2026-11-04 Gnumeric y Abiword en el invitado, y ordenes delegadas en BusyBox
+El invitado de la seccion 12 gana dos aplicaciones de oficina. Ted no existe en
+los repositorios de Alpine (`apk` no lo conoce), asi que se usa Abiword 3.0 como
+procesador de texto y Gnumeric 1.12 como hoja de calculo: sobre un invitado que
+ya trae LibreOffice cuestan +28,8 MiB y 6 paquetes, porque comparten GTK3, Pango
+y Cairo. La aplicacion se elige con `toolchain.app=<writer|gnumeric|abiword>` en
+la linea de comandos del kernel: `scripts/guest/toolchain-init` la lee de
+`/proc/cmdline` y anuncia `GUEST: app <nombre>` y `GUEST: <nombre> running`.
+`make run-app GUEST_APP=gnumeric` y `make test-app GUEST_APP=abiword` construyen
+`build/toolchain-os-app-<app>.iso` (copia de la del invitado con el parametro
+anadido) y la prueban con captura QMP; sin `GUEST_APP` todo sigue igual y abre
+Writer. `guest_linux.py` detecta que la lista de paquetes crecio y ejecuta `apk`
+sobre el root existente en vez de reinstalar el gigabyte de LibreOffice.
+En `test_linux_guest.py` se corrigio un fallo latente del sondeo: el offset
+saltaba al final del log, de modo que dos hitos llegados entre dos sondeos
+hacian que el intermedio se diese por perdido.
+La orden `LINUX` deja de ser el unico camino al binario: con el en la ISO, `LS`,
+`TREE` y `OPEN` delegan en los applets reales (`ls`, `find`, `cat`) mediante
+`linux_applet()` y sin imprimir el preambulo de estado, y se anaden `GREP`, `WC`,
+`SORT`, `HEAD`, `TAIL`, `FIND`, `STAT` y `OD`, que el kernel no implementaba. La
+ISO entregada no lleva binario, asi que alli se conserva el codigo propio y las
+pruebas de archivos, nucleo y editor no cambian. Verificado en general:
+`make check`, `smoke_test`, `test_core`, `test_gui`, `test_presentation`,
+`test_linux_bin` (que ahora comprueba la delegacion sin ruido) y `test-app` con
+Gnumeric y Abiword en QEMU UEFI con KVM a 1280x720.
+
+## 2026-11-04 Retirada del invitado Linux: todo dentro de ToolchainOS
+Se descarta la via externa: Limine ya no arranca un kernel Linux ajeno y desaparece
+la entrada `Linux + LibreOffice`. Borrados `scripts/guest/`,
+`scripts/guest_linux.py`, `scripts/test_linux_guest.py` y todo `vendor/guest/`
+(vmlinuz, initramfs, rootfs de 2,5 GiB, licencias y origen), junto con los objetivos
+`guest`, `guest-check`, `run-guest`, `test-guest`, `run-app`, `test-app` y
+`iso-guest`. En `scripts/qemu_config.py` se retiran `ISO_GUEST`, `OVMF_CODE`,
+`OVMF_VARS`, `uefi()` y `guest_disk()`; `run_vm.py` pierde `--linux` y
+`--guest-iso`; `update_manifest.py` deja de excluir `rootfs.img`. La ISO que se
+construye ya no copia `boot/linux/` ni concatena la entrada del invitado.
+LibreOffice, Gnumeric y Abiword quedan fuera del alcance del proyecto: son binarios
+dinamicos con `ld-musl` y GTK3, y este kernel no tiene modo usuario, cargador
+dinamico, hilos ni senales. Lo unico que ejecuta software de terceros es la
+personalidad Linux (seccion 12), con BusyBox estatico en ring 0. README, INDICE y
+LEEME se renumeran a 12 secciones; las entradas anteriores de este registro se
+conservan como historia de lo que se probo y se retiro.
+
+## 2026-11-05 Hipervisor VT-x, fase 1: VMXON y VMXOFF
+El kernel detecta VT-x (`CPUID.1:ECX[5]`), lee `IA32_FEATURE_CONTROL` (0x3A) y la
+revision del VMCS en `IA32_VMX_BASIC` (0x480), reserva una pagina de 4 KiB del PMM,
+ajusta CR0/CR4 a los bits fijos del modelo, activa `CR4.VMXE` y ejecuta `VMXON`;
+`VMXOFF` y la liberacion de la region deshacen todo. Nuevos `include/vmx.h`,
+`src/vmx.c` y `src/vmx_inst.asm`; `cpuid` en `src/cpuinfo.c` pasa a ser publico como
+`cpu_cpuid`. El comando `VMX` entra y sale, `VMX STATUS` solo informa, y `HELP`
+publica la linea nueva. `make test-vmx` (con KVM anidado) comprueba el informe,
+`VMXON=OK` y `VMXOFF=OK`; con TCG sale `SKIPPED` (77) y `VMX` responde `SOPORTE=NO`.
+Dos fallos reales quedaron documentados en la seccion 13 del README: el operando de
+`VMXON` es una direccion de memoria que contiene la direccion fisica de la region
+(pasar la region hace que el puntero sea su propio contenido y devuelve
+VMfailInvalid), y VT-x rechaza `VMXON` con #GP si CR0/CR4 no respetan
+`IA32_VMX_CR0/CR4_FIXED0/1`. Suites existentes sin cambios: `check`, `smoke`,
+`test-core`, `test-files`, `test-presentation` (54 textos), `test-gui` y
+`test-linux-bin` siguen en verde; el hipervisor solo se activa con `VMX`.
+
+## 2026-11-05 Hipervisor nativo en el escritorio y apagado total (APAGAR)
+El hipervisor deja de ser una orden de consola: el dock estrena un boton
+**Hipervisor** (icono de chip) con ventana propia que muestra soporte VT-x,
+estado, revision del VMCS, region VMXON y el puerto `PM1a_CNT`, y ofrece
+**Entrar VMX**, **Salir VMX** y **Apagar** (teclas `E`, `X` y `A`). `GUI
+HIPERVISOR` abre el escritorio con esa ventana ya activa y `GUI_WINDOW_COUNT`
+sube a 7. Todo lo ejecuta el kernel en ring 0: no hay QEMU ni hipervisor
+anfitrion de por medio.
+Nuevo `include/power.h` + `src/power.c` con `power_off()`: sale de VMX si
+estaba activo, cierra el escritorio, sincroniza el sistema de archivos y envia
+ACPI S5 en `PM1a_CNT` (0x604 de QEMU y 0xB004 de Bochs) con `SLP_TYP=5` y, para
+QEMU, `SLP_TYP=0`; si el firmware no responde, detiene la CPU avisando por COM1.
+La orden `APAGAR` queda reservada a la shell y el agente no puede lanzarla.
+`VMX OFF` sale de VMX sin entrar. `make test-apagar` verifica ambos caminos
+(consola y ventana) esperando el evento QMP `SHUTDOWN` con KVM y con TCG.
+El parseo ACPI se descarto: la FADT vive en la memoria reservada baja, que el
+HHDM de Limine no mapea, y leerla provocaba `#PF` (CR2 `0xFFFF80000000040E` en
+el EBDA y `0xFFFF8000000F5320` en la RSDT); el motivo y los puertos usados
+quedan en la seccion 14 del README.
+
+## 2026-11-05 Retirada de VMX y hoja de calculo nativa en el escritorio
+El hipervisor se retira por completo: se borran `include/vmx.h`, `src/vmx.c`,
+`src/vmx_inst.asm`, `src/vmx.asm` y `scripts/test_vmx.py`; `src/gui.c` pierde
+`WIN_HYPER`, `SLOT_HYPER`, `gui_open_hypervisor`, `draw_hyper_content` y el sexto
+boton del dock vuelve a ser el ultimo, con `GUI_WINDOW_COUNT` de nuevo en 6;
+`src/kernel.c` deja de despachar `VMX` y publica `GUI HOJA` en lugar de
+`GUI HIPERVISOR`; `src/power.c` ya no sale de VMX antes del S5 y conserva el
+apagado por `PM1a_CNT` (0x604 y 0xB004). `HELP` y `test_presentation.py` bajan a
+55 textos sin las lineas de VMX.
+La ofimatica pedida se resuelve dentro del propio sistema: nueva app
+`apps/hoja.c` (ABI 5, 800x520) con rejilla de 8x16, edicion por teclado y raton,
+formulas `=` con `+ - * /`, parentesis, referencias A1..H16 y funciones SUMA,
+PROMEDIO, MIN, MAX y CONTAR sobre celda o rango, en aritmetica entera porque las
+apps no enlazan libgcc. Guardar y Abrir trabajan sobre `hoja.csv` del directorio
+actual, legible desde la terminal, y la app emite marcadores `hoja.elf:` por COM1
+para validarla sin capturas. `limine.conf` publica `hoja.elf` y `test_gui.py`
+comprueba apertura, formula, edicion y guardado (con mapa US para escribir `=`,
+restaurado despues a ES). Verificado: `make iso`, `check_elf`, `test_gui`,
+`test_presentation`, `test_apagar` (evento QMP `SHUTDOWN` con KVM), `test_core`,
+`smoke_test` y `test_files_editor`. Nuevo `scripts/verify_hoja_capture.py`, que
+abre `GUI HOJA` por QMP, escribe tres importes y una formula de rango y deja la
+captura `artifacts/e56-hoja-calculo.png` como evidencia visual.
+
+## 2026-11-04 USB: controladora, memorias, arranque desde pendrive y Secure Boot
+Nuevo subsistema USB por sondeo, sin IRQ: `src/usb.c` localiza la controladora
+xHCI por PCI (clase 0x0C, subclase 0x03, progif 0x30), mapea su BAR con
+`src/mmio.c` y monta anillos de comandos y de eventos. El hueco PCI no aparece
+en el mapa de Limine, asi que `mmio_map()` recorre la paginacion de 4 niveles
+desde CR3, afina paginas de 1 GiB y 2 MiB a 4 KiB y las marca PWT|PCD.
+La enumeracion usa Enable Slot, Address Device, descriptores y
+SET_CONFIGURATION; el almacenamiento masivo BOT/SCSI usa CBW/CSW de 31/13 bytes
+con paginas DMA separadas por etapa (INQUIRY, TEST UNIT READY, READ CAPACITY(10),
+MODE SENSE, READ(10) y WRITE(10)). `src/usb_fat.c` interpreta MBR/GPT y monta
+FAT12/16/32 de solo lectura (raiz, cadenas de clusteres, etiqueta) y detecta sin
+descifrar LUKS, BitLocker, exFAT y NTFS. Comandos nuevos en la shell: USB INFO,
+PUERTOS, LISTAR, VER, IMPORTAR, LEER, ESCRIBIR y REINICIAR; el arranque publica
+controladora, medio, particiones, sistema montado y avisos de cifrado.
+La ISO hibrida se copia a un pendrive con `scripts/escribir_usb.py`, que enumera
+con lsblk, rechaza discos del sistema o montados y exige la frase exacta
+ESCRIBIR <dispositivo>. `scripts/secure_boot.py` genera claves propias con
+openssl, firma BOOTX64.EFI con sbsign y `make secureboot-iso` reconstruye la ISO
+firmada; `scripts/test_usb.py` cubre FAT32, escritura y persistencia de un
+sector, LUKS, solo lectura y ausencia de dispositivos, y
+`scripts/test_secureboot.py` demuestra con OVMF que la ISO sin Secure Boot
+arranca y que con Secure Boot el cargador sin firmar se rechaza. Verificado:
+`make iso`, `make test-usb` y `make test-secureboot`.

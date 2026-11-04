@@ -167,7 +167,7 @@ def main():
 
             client.ascii('elf\n')
             text = wait_for(serial_path, 'APLICACIONES ELF DISPONIBLES', 10, 'modulos ELF listados')
-            for module in ('editor.elf', 'terminal.elf'):
+            for module in ('editor.elf', 'terminal.elf', 'hoja.elf'):
                 if module not in text:
                     print('FALLO: la ISO no contiene %s' % module)
                     return 1
@@ -201,6 +201,10 @@ def main():
             client.button(False)
             client.move(-90, -60)
             width, height = (int(value) for value in resolution.lower().split('x'))
+            # Centros del dock a 1280 de ancho, con sus seis botones (Sistema
+            # 32.3 %, Archivos 39.0 %, Red 44.6 %, Entrada 50.0 %, Imagenes
+            # 56.9 %, Apps 63.0 %); anadir o quitar un boton mueve estas
+            # fracciones, que salen de dock_button_rect().
             click_at(client, width * 57 // 100, height * 94 // 100)
             wait_for(serial_path, 'GUI: VISOR IMAGENES', 10,
                      'visor de imagenes abierto desde el dock')
@@ -209,7 +213,7 @@ def main():
 
             # Con dos ventanas abiertas el teclado solo trabaja en la activa:
             # se abre Red desde el dock y las flechas ya no cambian la imagen.
-            click_at(client, width * 43 // 100, height * 94 // 100)
+            click_at(client, width * 45 // 100, height * 94 // 100)
             wait_for(serial_path, 'GUI: VENTANA ACTIVA Red', 10,
                      'el clic en Red le da la ventana activa')
             before = serial_path.read_text(errors='replace')
@@ -272,6 +276,50 @@ def main():
                      'archivo guardado desde el editor se lee en la terminal')
             client.key('esc')
             wait_for(serial_path, 'ELF: FIN terminal.elf CODIGO=0', 20, 'retorno de la terminal ELF')
+
+            # Hoja de calculo: app ELF nativa con formulas y CSV propio.
+            client.ascii('crear hoja.csv 5,7\n')
+            wait_for(serial_path, 'ARCHIVO GUARDADO CON EXITO', 20,
+                     'hoja CSV de partida creada desde la consola')
+            # El mapa ES-LATAM no tiene '=' ni '-' directas; con US se escriben
+            # las formulas desde QMP sin combinar shift.
+            client.ascii('teclado us\n')
+            wait_for(serial_path, 'TECLADO: US', 10, 'mapa US para escribir formulas')
+            client.ascii('gui run 2\n')
+            wait_for(serial_path, 'ELF: EJECUTANDO hoja.elf', 20,
+                     'carga de la hoja de calculo')
+            wait_for(serial_path, 'hoja.elf: HOJA 8X16 LISTA', 20,
+                     'la hoja arranca con la rejilla de 8x16')
+            # La ventana de 800x520 queda centrada en 1280x720: su superficie
+            # empieza en (240, 97) y el boton Abrir ocupa 120..224 de ancho y
+            # 7..33 de alto dentro de la propia aplicacion.
+            click_at(client, 240 + 172, 97 + 20)
+            wait_for(serial_path, 'hoja.elf: ABIERTO /hoja.csv', 20,
+                     'la hoja carga el CSV del directorio actual')
+            # A1=5 y B1=7: la formula escrita en C1 debe dar 2. Se escribe en
+            # minusculas porque QMP no envia mayusculas sin shift.
+            client.key('right')
+            client.key('right')
+            client.ascii('=b1-a1')
+            client.key('ret')
+            wait_for(serial_path, 'hoja.elf: FORMULA C1 =b1-a1 -> 2', 20,
+                     'la formula opera sobre el valor de otras celdas')
+            client.ascii('10')
+            client.key('ret')
+            wait_for(serial_path, 'hoja.elf: CELDA C2 10', 20,
+                     'la celda activa acepta numeros')
+            click_at(client, 240 + 60, 97 + 20)
+            wait_for(serial_path, 'hoja.elf: GUARDADO /hoja.csv', 20,
+                     'el boton Guardar escribe el CSV en el sistema de archivos')
+            client.key('esc')
+            wait_for(serial_path, 'ELF: FIN hoja.elf CODIGO=0', 20,
+                     'retorno de la hoja de calculo')
+            client.ascii('open hoja.csv\n')
+            wait_for(serial_path, '=b1-a1', 20,
+                     'el CSV conserva la formula para volver a calcularla')
+            client.ascii('teclado es\n')
+            wait_for(serial_path, 'TECLADO: ES-LATAM', 10,
+                     'se restaura el mapa ES-LATAM de la entrega')
 
             # GUI EDIT: el escritorio lanza el editor con el archivo indicado
             # mediante el handoff launch_file del ABI v4.

@@ -19,8 +19,11 @@
 #include "gui.h"
 #include "mouse.h"
 #include "net.h"
+#include "usb.h"
 #include "rtc.h"
 #include "elf_loader.h"
+#include "linux_abi.h"
+#include "power.h"
 #include "shell.h"
 /* KEEP en linker.ld conserva estas solicitudes incluso con --gc-sections. */
 __attribute__((used,section(".limine_requests_start")))
@@ -140,7 +143,7 @@ static void gui_command(const char *args){
     }
     /* GUI RUN <indice>: abre la interfaz y ejecuta una aplicacion ELF como
      * si se hubiera pulsado en la ventana de aplicaciones. */
-    char first[8];size_t used=0;
+    char first[12];size_t used=0;
     while(argument[used]&&argument[used]!=' '&&used+1<sizeof(first)){first[used]=argument[used];used++;}
     first[used]=0;
     if(ci_same(first,"RUN")){
@@ -161,6 +164,15 @@ static void gui_command(const char *args){
         if(!*rest)console_write("USO: GUI EDIT <ARCHIVO>.\n");
         else if(!gui_launch_editor(rest))console_write("GUI: NO SE PUDO ABRIR EL EDITOR.\n");
         gui_shutdown();
+        return;
+    }
+    /* GUI HOJA: abre el escritorio con la hoja de calculo ya cargada, sin
+     * tener que recorrer la ventana de aplicaciones. */
+    if(ci_same(first,"HOJA")){
+        int index=elf_find("hoja.elf");
+        if(index<0)console_write("GUI: HOJA DE CALCULO NO DISPONIBLE EN LA ISO.\n");
+        else elf_run((unsigned)index);
+        gui_run();
         return;
     }
     gui_run();
@@ -238,6 +250,7 @@ static void help(void){
         "    SUMA [a b] | TEXTO     SUMA Y ENTRADA GUIADA; ECO REPITE\n"
         "    COLOR [nombre]         COLOR DE TEXTO; FONDO [nombre]\n"
         "    LIMPIAR | HALT         BORRAR PANTALLA / DETENER CPU\n"
+        "    APAGAR                 CERRAR LA GUI Y APAGAR EL EQUIPO (S5)\n"
         "  SISTEMA DE ARCHIVOS\n"
         "    LS / DIR [ruta]        LISTAR; TREE [ruta] MUESTRA EL ARBOL\n"
         "    PWD | CD [ruta]        RUTA ACTUAL Y CAMBIO DE DIRECTORIO\n"
@@ -263,12 +276,16 @@ static void help(void){
         "  INTERFAZ GRAFICA, RED Y APLICACIONES\n"
         "    GUI | ESCRITORIO        ABRE LA INTERFAZ; GUI DEMO UN FOTOGRAMA\n"
         "    GUI EDIT <archivo>      ABRE EL EDITOR CON ESE ARCHIVO\n"
+        "    GUI HOJA                HOJA DE CALCULO EN EL ESCRITORIO\n"
         "    RATON                   RATON/TOUCHPAD PS/2: POSICION Y BOTONES\n"
         "    HORA | TIME             HORA LOCAL DEL ANFITRION (TAMBIEN EN LA BARRA)\n"
         "    RED [ARP]               RTL8139: MAC, ENLACE Y ARP A LA PUERTA\n"
         "    RED PING <ip> | DNS x    ICMP ECO Y RESOLUCION DNS (10.0.2.15)\n"
         "    RED INTERNET           PRUEBA PUERTA Y DNS CONTRA LA RED DE QEMU\n"
+        "    USB [INFO|PUERTOS]     XHCI Y FAT MONTADA; LISTAR, VER E IMPORTAR\n"
+        "    USB LEER|ESCRIBIR <S>  SECTORES CRUDOS; REINICIAR RENUMERA\n"
         "    ELF | ELF RUN <n>       APLICACIONES ELF64 DE LOS MODULOS\n"
+        "    LINUX <applet> [args]   BUSYBOX REAL; LS/OPEN/TREE DELEGAN\n"
         "  INTELIGENCIA ARTIFICIAL - OLLAMA POR COM2\n"
         "    IA <PREGUNTA>          CONSULTA; IA STATUS VERIFICA EL PUENTE\n"
         "    IA CANCEL              ABORTA LA CONSULTA EN CURSO\n"
@@ -387,7 +404,9 @@ static void execute(char *line){
         else console_write("HORA: EL RELOJ CMOS NO DEVUELVE UN VALOR VALIDO.\n");
     }
     else if(equal(cmd,"RED")||equal(cmd,"NET"))net_command(args);
+    else if(equal(cmd,"USB"))usb_command(args);
     else if(equal(cmd,"ELF")||equal(cmd,"APPS"))elf_command(args);
+    else if(equal(cmd,"LINUX")||equal(cmd,"BB"))linux_command(args);
     else if(equal(cmd,"PS"))process_list();
     else if(equal(cmd,"THREADS"))thread_list();
     else if(equal(cmd,"SCHED"))scheduler_command(args);
@@ -403,7 +422,13 @@ static void execute(char *line){
     else if(equal(cmd,"UPTIME"))uptime();
     else if(equal(cmd,"EXTEST"))exception_test(equal(args,"PF"));
     else if(equal(cmd,"EDIT"))editor_open(args);
-    else if(equal(cmd,"TREE"))fs_tree(args);
+    else if(equal(cmd,"TREE")){
+        char tree_path[FS_PATH_MAX];
+        const char *target=args;
+        if(!*target){fs_get_cwd_path(tree_path,sizeof(tree_path));target=tree_path;}
+        if(linux_applet("find",target))return;
+        fs_tree(args);
+    }
     else if(equal(cmd,"RM")||equal(cmd,"RMDIR")||equal(cmd,"REN")||equal(cmd,"COPY")){
         char err[96];int ok=0;
         if(equal(cmd,"RM")||equal(cmd,"RMDIR"))ok=fs_remove(args,equal(cmd,"RMDIR"),err,sizeof(err));
@@ -438,6 +463,7 @@ static void execute(char *line){
         else if(!background(args))console_write("ELIGE CLARO, OSCURO O AZUL.\n");
     }else if(equal(cmd,"OPEN")){
         if(!*args){state=OPEN_FILE_INPUT;return;}
+        if(linux_applet("cat",args))return;   /* cat real cuando hay binario */
         uint32_t sz=0;
         const char *c=fs_read_file(args,&sz);
         if(!c){
@@ -495,7 +521,23 @@ static void execute(char *line){
             console_write("ERROR: ");console_write(err[0]?err:"NO SE PUDO CREAR ARCHIVO");console_putc('\n');
         }
     }else if(equal(cmd,"LS")||equal(cmd,"DIR")){
+        /* Con el binario Linux en la ISO el listado lo hace el applet real: una
+         * sola implementacion POSIX en vez de dos. La ISO entregada no lleva
+         * binario, asi que alli se mantiene el listado propio del kernel. */
+        char list_path[FS_PATH_MAX];
+        const char *target=args;
+        if(!*target){fs_get_cwd_path(list_path,sizeof(list_path));target=list_path;}
+        if(linux_applet("ls",target))return;
         fs_list_dir(args);
+    }else if(equal(cmd,"GREP")||equal(cmd,"WC")||equal(cmd,"SORT")||equal(cmd,"HEAD")
+             ||equal(cmd,"TAIL")||equal(cmd,"FIND")||equal(cmd,"STAT")||equal(cmd,"OD")){
+        /* Aplets que el kernel no implementa: solo existen con el binario. */
+        char applet[8];size_t used=0;
+        for(const char *c=cmd;*c&&used+1<sizeof(applet);c++)
+            applet[used++]=(char)((*c>='A'&&*c<='Z')?*c+32:*c);
+        applet[used]=0;
+        if(!linux_applet(applet,args))
+            console_write("ESTA ORDEN NECESITA EL BINARIO LINUX: 'make linux-bin' Y RECONSTRUYE LA ISO.\n");
     }else if(equal(cmd,"CD")){
         if(!*args){
             fs_set_cwd(0);
@@ -520,6 +562,7 @@ static void execute(char *line){
         console_putc('\n');
     }else if(equal(cmd,"LIMPIAR"))console_clear();
     else if(equal(cmd,"HALT")){console_write("CPU DETENIDA. CIERRA QEMU PARA SALIR.\n");asm_detener();}
+    else if(equal(cmd,"APAGAR"))power_off("COMANDO APAGAR");
     else if(*cmd)console_write("COMANDO DESCONOCIDO. ESCRIBE HELP.\n");
 }
 /* Terminal grafica: reutiliza el despachador real en vez de duplicar ordenes.
@@ -533,7 +576,7 @@ int shell_exec(const char*line,char*out,size_t capacity){
     char first[12];size_t used=0;
     while(line[used]&&line[used]!=' '&&used+1<sizeof(first)){first[used]=line[used];used++;}
     first[used]=0;
-    if(ci_same(first,"GUI")||ci_same(first,"ESCRITORIO")||ci_same(first,"HALT")){
+    if(ci_same(first,"GUI")||ci_same(first,"ESCRITORIO")||ci_same(first,"HALT")||ci_same(first,"APAGAR")){
         copystr(out,"ORDEN NO DISPONIBLE DESDE LA TERMINAL GRAFICA.",capacity);return -1;
     }
     char copy[192];size_t length=slen(line);
@@ -572,7 +615,9 @@ void kmain(void){
     storage_init();
     mouse_init();
     net_init();
+    usb_init();
     elf_init(modules.response);
+    linux_abi_init();
     agent_bind(agent_runner);
     console_write("\n============================================================\n");
     console_write("TOOLCHAIN OS V3.1 E56 - SISTEMA OPERATIVO X86-64\n");

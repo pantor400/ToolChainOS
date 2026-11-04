@@ -29,7 +29,8 @@ with Guest('v31-presentacion',['-qmp',f'unix:{sock},server=on,wait=off']) as g:
        'TASKS START','EXTEST DE/PF','DISK INFO','DISK READ <LBA>','DISK MBR','DISK TEST','FSSTATUS',
        'IA <PREGUNTA>','IA STATUS','IA CANCEL','RUN CPP','RUN_CPP','CREAR_CARPETA','CREAR_ARCHIVO',
        'TOUCH','CANCELAR','PARA USAR LA INTELIGENCIA ARTIFICIAL, ESCRIBE IA SEGUIDO DE TU PREGUNTA.',
-       'IA Que es un sistema operativo?','SERVIDOR OLLAMA Y PUENTE COM2 ACTIVOS']
+       'IA Que es un sistema operativo?','SERVIDOR OLLAMA Y PUENTE COM2 ACTIVOS','LINUX <applet> [args]',
+       'GUI HOJA','APAGAR']
     for command in required:assert command in text,command
     capture('help-e56.png')
     g.send('suma 25 -8',['= 17'])

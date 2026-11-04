@@ -16,7 +16,7 @@ documentos por intención y recuerda las convenciones del árbol.
 | Documento | Contenido |
 |---|---|
 | [`diseno/ARQUITECTURA.md`](diseno/ARQUITECTURA.md) | Subsistemas, mapa de memoria y flujo de arranque |
-| [`diseno/GUI_RED_APPS.md`](diseno/GUI_RED_APPS.md) | Escritorio, repintado por zonas, tema claro, assets escalables, ratón/touchpad, RTL8139, ventanas Sistema/Archivos y apps ELF64 (editor y terminal) |
+| [`diseno/GUI_RED_APPS.md`](diseno/GUI_RED_APPS.md) | Escritorio, repintado por zonas, tema claro, assets escalables, ratón/touchpad, RTL8139, ventanas Sistema/Archivos y apps ELF64 (editor, terminal y hoja de cálculo) |
 | [`diseno/DECISIONES_TECNICAS.md`](diseno/DECISIONES_TECNICAS.md) | Decisiones tomadas y alternativas descartadas |
 | [`diseno/FASES_IMPLEMENTADAS.md`](diseno/FASES_IMPLEMENTADAS.md) | Alcance de cada fase (estado histórico de V3.1) |
 | [`etapas56-diagramas/`](etapas56-diagramas/) | Diagramas de contexto, estados, memoria y Round Robin |
@@ -32,6 +32,11 @@ documentos por intención y recuerda las convenciones del árbol.
 | [`guias/TECLADO_UTF8.md`](guias/TECLADO_UTF8.md) | Distribuciones, teclas muertas y entrada UTF-8 |
 | [`diseno/GUI_RED_APPS.md`](diseno/GUI_RED_APPS.md) | Comandos `GUI`, `GUI DEMO`, `GUI RUN n`, `RED`, `RATON`, `HORA` y `ELF`; configuración de QEMU en `scripts/qemu_config.py` |
 | [`guias/ENTREGA_DOCENTE.md`](guias/ENTREGA_DOCENTE.md) | Resumen para el docente |
+| [README §12](../README.md#12-personalidad-linux-busybox-en-ring-0) | Personalidad Linux: SYSCALL, pila con auxv, despacho de llamadas y BusyBox ejecutado por el kernel propio |
+| [README §13](../README.md#13-hoja-de-cálculo-en-el-escritorio-gui-hoja) | Hoja de cálculo nativa: rejilla 8x16, fórmulas con referencias y funciones, teclado y ratón, y persistencia CSV |
+| [README §14](../README.md#14-apagado-nativo-apagar) | Apagado nativo: orden `APAGAR`, cierre ordenado (GUI y FS) y ACPI S5 por `PM1a_CNT` |
+| [README §15](../README.md#15-arranque-desde-usb-y-secure-boot) | USB: xHCI y BOT/SCSI, montaje FAT, aviso de medios cifrados, copia de la ISO a un pendrive y Secure Boot con claves propias |
+| [`vendor/linux-bin/ORIGEN.md`](../vendor/linux-bin/ORIGEN.md) | Origen, versión y licencia del BusyBox que ejecuta la personalidad Linux |
 
 ## 4. Validación, evidencias e informes
 

@@ -87,6 +87,7 @@ Desde Apps se lanza una aplicación ELF; también directamente:
 ~~~text
 GUI RUN 0
 GUI RUN 1
+GUI HOJA
 ~~~
 `editor.elf` (índice 0) abre un editor de texto con una plantilla en blanco sin
 nombre. Los botones `Nuevo`, `Abrir` y `Guardar` de su barra hacen lo que dicen:
@@ -99,6 +100,11 @@ aparece una barra vertical a la derecha que se puede pulsar y arrastrar.
 `ls`—, guarda historial con las flechas, muestra su propia barra vertical cuando
 la salida no cabe (`Inicio`/`Fin` van a los extremos) y `limpiar` borra la
 pantalla mientras `salir` cierra.
+`hoja.elf` (índice 2, o `GUI HOJA`) es la hoja de cálculo: rejilla de 8x16 con
+fórmulas (`=b1-a1`, `=SUMA(a1:b3)`, `=PROMEDIO`, `=MIN`, `=MAX`, `=CONTAR`),
+botones `Guardar`/`Abrir`/`Limpiar` sobre `hoja.csv` y flechas/RET/TAB/SUPR para
+moverse y editar. En el mapa ES-LATAM hay que cambiar a `TECLADO US` para
+escribir `=` y `-`, que no tienen tecla directa en español.
 Para abrir un archivo concreto desde la shell: `GUI EDIT nota` (también sirve el
 botón `Editar` de la ventana Archivos).
 Al salir, ESC devuelve el control al kernel y la serie muestra
@@ -111,7 +117,8 @@ uptime; en Archivos, las flechas navegan, `Enter` abre, `n` crea un archivo,
 `c` una carpeta, `r` renombra, `d` borra y `e` abre el archivo en el editor.
 Todo se comprueba sin capturas con `make test-gui`: marcadores COM1 conducidos
 por QMP (`GUI_READY`, `GUI_FRAME`, `IRQ_PAQUETES`, `SESION FINALIZADA`), la
-latencia de la sesión gráfica y la ejecución de `help` desde la terminal.
+latencia de la sesión gráfica y la ejecución de `help` desde la terminal, más el
+cálculo y el guardado de la hoja de cálculo.
 Para revisar el aspecto real están las capturas de
 `python3 scripts/verify_editor_capture.py`: `artifacts/verificacion-terminal-scroll.png`,
 `verificacion-editor-scroll.png`, `verificacion-editor-selector.png`,

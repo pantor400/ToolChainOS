@@ -12,6 +12,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ISO = ROOT / 'build' / 'toolchain-os.iso'
+# Variante con el BusyBox estatico como modulo: la usa "make test-linux-bin".
+ISO_BIN = ROOT / 'build' / 'toolchain-os-busybox.iso'
 
 
 def accelerator():
@@ -64,3 +66,21 @@ def disk(path, bus='ide', index=0):
     value = str(path).replace(',', ',,')
     flags = 'format=raw,if=%s,index=%d,cache=writeback,aio=threads' % (bus, index)
     return ['-drive', 'file=%s,%s' % (value, flags)]
+
+
+def usb_controller(ports=4):
+    """Controladora xHCI de QEMU: la que el kernel sondea por PCI (clase 0x0C).
+    Los puertos se reparten con p2 (USB 2.0) y p3 (USB 3.0); 'ports' fija
+    cuantos de cada tipo expone el dispositivo."""
+    return ['-device', 'qemu-xhci,id=xhci,p2=%d,p3=%d' % (ports, ports)]
+
+
+def usb_storage(path, readonly=False):
+    """Pendrive de prueba: imagen cruda expuesta como masa USB (BOT/SCSI).
+    Con readonly=True QEMU informa el medio como protegido contra escritura."""
+    value = str(path).replace(',', ',,')
+    flags = 'format=raw,if=none,id=usbstick,cache=writeback'
+    if readonly:
+        flags += ',readonly=on'
+    return ['-drive', 'file=%s,%s' % (value, flags),
+            '-device', 'usb-storage,drive=usbstick,bus=xhci.0']

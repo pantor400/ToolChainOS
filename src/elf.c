@@ -168,6 +168,12 @@ size_t elf_size(unsigned index) {
     return (size_t)module_list->modules[index]->size;
 }
 
+const uint8_t *elf_module_data(unsigned index, size_t *size) {
+    if (index >= elf_count()) return 0;
+    if (size) *size = (size_t)module_list->modules[index]->size;
+    return (const uint8_t *)module_list->modules[index]->address;
+}
+
 int elf_find(const char *name) {
     if (!name) return -1;
     for (unsigned i = 0; i < elf_count(); i++)
@@ -181,9 +187,14 @@ static void describe_error(const char *message) {
     console_write("ELF: "); console_write(message); console_putc('\n');
 }
 
-/* Copia segmentos, aplica R_X86_64_RELATIVE y ejecuta. Se rechaza cualquier
- * otro tipo de reubicacion: el ABI exige PIE estatico sin simbolos externos. */
-static int load_and_run(const uint8_t *image, size_t size, const char *name) {
+/* Copia segmentos y aplica R_X86_64_RELATIVE. Se rechaza cualquier otro tipo
+ * de reubicacion: el ABI exige PIE estatico sin simbolos externos. No ejecuta
+ * nada, de modo que la personalidad Linux puede reutilizarlo con su propio
+ * convenio de arranque. */
+int elf_load_image(const uint8_t *image, size_t size, elf_image_t *out) {
+    if (!out) return 0;
+    zero(out, sizeof(*out));
+    if (!image) { describe_error("IMAGEN AUSENTE"); return 0; }
     if (size < sizeof(elf64_header_t)) { describe_error("CABECERA INCOMPLETA"); return 0; }
     const elf64_header_t *header = (const elf64_header_t *)image;
     if (*(const uint32_t *)header->ident != ELF_MAGIC) { describe_error("NO ES ELF"); return 0; }
@@ -228,7 +239,7 @@ static int load_and_run(const uint8_t *image, size_t size, const char *name) {
 
     /* Reubicaciones dinamicas: sh_info == 0 identifica a .rela.dyn; las
      * secciones .rela.text son PC-relativas y no necesitan parcheo. */
-    unsigned applied = 0;
+    uint64_t applied = 0;
     if (header->shoff && header->shnum && header->shentsize >= sizeof(elf64_shdr_t) &&
         header->shoff + (uint64_t)header->shnum * header->shentsize <= size) {
         const elf64_shdr_t *sections = (const elf64_shdr_t *)(image + header->shoff);
@@ -253,29 +264,50 @@ static int load_and_run(const uint8_t *image, size_t size, const char *name) {
         }
     }
 
+    out->physical = physical;
+    out->pages = pages;
+    out->bias = bias;
+    out->entry = bias + header->entry;
+    out->phoff = bias + header->phoff;
+    out->phnum = header->phnum;
+    out->phentsize = header->phentsize;
+    out->relocs = applied;
+    return 1;
+}
+
+void elf_free_image(elf_image_t *image) {
+    if (!image || !image->physical) return;
+    pmm_free_run(image->physical, image->pages);
+    zero(image, sizeof(*image));
+}
+
+/* Carga, ejecuta y libera una app del ABI host_api_t. */
+static int load_and_run(const uint8_t *image, size_t size, const char *name) {
+    elf_image_t loaded;
+    if (!elf_load_image(image, size, &loaded)) return 0;
     uint64_t stack_pages = 4;
     uint64_t stack_physical = pmm_alloc_run(stack_pages);
     if (!stack_physical) {
         describe_error("SIN MEMORIA PARA LA PILA");
-        pmm_free_run(physical, pages);
+        elf_free_image(&loaded);
         return 0;
     }
     uint8_t *stack = pmm_ptr(stack_physical);
     uint64_t stack_top = (uint64_t)stack + stack_pages * 4096 - 16;
 
     console_write("ELF: EJECUTANDO "); console_write(name);
-    console_write(" ENTRY="); console_hex(bias + header->entry);
-    console_write(" PAGINAS="); console_dec(pages);
-    console_write(" RELOCS="); console_dec(applied); console_putc('\n');
+    console_write(" ENTRY="); console_hex(loaded.entry);
+    console_write(" PAGINAS="); console_dec(loaded.pages);
+    console_write(" RELOCS="); console_dec(loaded.relocs); console_putc('\n');
 
     busy = 1;
     last_code = 0;
-    elf_call_app(bias + header->entry, stack_top, &host);
+    elf_call_app(loaded.entry, stack_top, &host);
     busy = 0;
 
     gui_app_close();
     pmm_free_run(stack_physical, stack_pages);
-    pmm_free_run(physical, pages);
+    elf_free_image(&loaded);
     console_write("ELF: FIN "); console_write(name);
     console_write(" CODIGO="); console_signed(last_code); console_putc('\n');
     return 1;
