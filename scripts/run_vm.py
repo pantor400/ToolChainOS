@@ -3,6 +3,7 @@
 import argparse,os,signal,stat,subprocess,sys
 from pathlib import Path
 from create_test_disk import create
+import qemu_config
 ROOT=Path(__file__).resolve().parents[1]
 def image_path(value):
     path=Path(value)
@@ -21,13 +22,18 @@ def stop(p):
 def main():
     p=argparse.ArgumentParser();p.add_argument('--ata',action='store_true');p.add_argument('--ai',action='store_true')
     p.add_argument('--headless',action='store_true');p.add_argument('--disk',default='build/data.img')
+    p.add_argument('--fullscreen',action='store_true');p.add_argument('--no-net',action='store_true')
     p.add_argument('--print-command',action='store_true');a=p.parse_args()
     os.chdir(ROOT);os.umask(0o077)
-    command=['qemu-system-x86_64','-machine','pc' if a.ata else 'q35','-accel','tcg',
-        '-vga','std','-m','256M','-smp','2','-cdrom','build/toolchain-os.iso',
-        '-boot','d','-nic','none','-serial','stdio','-monitor','none','-no-reboot','-no-shutdown']
-    if a.headless:command+=['-display','none']
-    if a.ata:command+=['-drive',f'file={str(image_path(a.disk)).replace(",",",,")},format=raw,if=ide,index=0']
+    command=(qemu_config.base(machine='pc' if a.ata else 'q35', iso='build/toolchain-os.iso')
+        + qemu_config.serial_stdio())
+    if a.no_net:command+=['-nic','none']
+    else:command+=qemu_config.net()
+    if a.headless:command+=qemu_config.display('none')
+    else:
+        command+=qemu_config.display(os.environ.get('QEMU_DISPLAY','gtk,zoom-to-fit=on'))
+        if a.fullscreen or os.environ.get('QEMU_FULLSCREEN')=='1':command+=['-full-screen']
+    if a.ata:command+=qemu_config.disk(image_path(a.disk))
     sock=ROOT/'build/ai.sock'
     if a.ai:
         if sock.exists() or sock.is_symlink():raise ValueError('build/ai.sock ya existe; comprueba su propietario antes de retirarlo')

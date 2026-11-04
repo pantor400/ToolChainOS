@@ -1,22 +1,26 @@
 #!/usr/bin/env python3
 """Reproducible results; missing optional components never count as passed."""
-import datetime,json,shutil,subprocess,time
+import datetime,json,os,shutil,subprocess,time
 from pathlib import Path
+# Misma variable que el Makefile: SAN= desactiva los sanitizers del anfitrion.
+san=['-fsanitize='+os.environ['SAN']] if os.environ.get('SAN','address,undefined').strip() else []
 steps=[
  ('build',[['make','iso']],['gcc','nasm','ld','xorriso']),
  ('elf',[['make','check']],['python3']),
  ('memory-host',[['make','test-memory-host']],['gcc']),
  ('scheduler-host',[['make','test-scheduler-host']],['gcc','nasm']),
  ('memory-scheduler-qemu',[['python3','scripts/test_memory_scheduler.py']],['qemu-system-x86_64']),
- ('fs-host',[['gcc','-std=c11','-Wall','-Wextra','-Werror','-fsanitize=address,undefined','-Iinclude','-Ivendor/limine','scripts/test_fs_host.c','src/fs.c','-o','build/test-fs-host'],['build/test-fs-host']],['gcc']),
+ ('fs-host',[['gcc','-std=c11','-Wall','-Wextra','-Werror',*san,'-Iinclude','-Ivendor/limine','scripts/test_fs_host.c','src/fs.c','-o','build/test-fs-host'],['build/test-fs-host']],['gcc']),
  ('utf8-host',[['make','test-utf8-host']],['gcc']),
  ('utf8-keyboard',[['python3','scripts/test_utf8_keyboard.py']],['qemu-system-x86_64']),
  ('legacy',[['python3','scripts/smoke_test.py']],['qemu-system-x86_64']),
  ('files-editor',[['python3','scripts/test_files_editor.py']],['qemu-system-x86_64']),
  ('core',[['python3','scripts/test_core.py']],['qemu-system-x86_64']),
+ ('gui',[['python3','scripts/test_gui.py']],['qemu-system-x86_64']),
  ('persistence',[['python3','scripts/test_persistence.py']],['qemu-system-x86_64']),
  ('utf8-persistence',[['python3','scripts/test_utf8_persistence.py']],['qemu-system-x86_64']),
  ('ai-transport-mock',[['python3','scripts/test_ai.py']],['qemu-system-x86_64']),
+ ('ai-agent',[['python3','scripts/test_agent.py']],['qemu-system-x86_64']),
  ('uefi',[['python3','scripts/test_uefi.py']],['qemu-system-x86_64']),
  ('ai-utf8-real',[['python3','scripts/test_ai_utf8.py']],['qemu-system-x86_64']),
  ('ai-real',[['python3','scripts/test_ai_real.py']],['qemu-system-x86_64'])]

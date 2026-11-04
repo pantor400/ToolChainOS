@@ -51,3 +51,93 @@ copystr() y fs_split(). RUN CPP, RUN_CPP y la entrada guiada comparten run_cpp_p
 Borrados scripts/legacy/ (seis guiones archivados), la configuración local de CLion y
 los intermedios de build/iso_root. Comportamiento del SO y comandos sin cambios;
 recompilado, verificado con check_elf y con las pruebas host PMM, heap, UTF-8 y scheduler.
+
+## 2026-11-02 Agente de bajo nivel y correcciones P1
+La IA deja de ser solo conversacional: `AGENTE <objetivo>` abre una sesión TC/1 por COM2
+(tipo 4) donde el puente propone órdenes (0x84), el kernel las valida con lista blanca,
+las ejecuta en el shell y devuelve la salida real capturada (tipo 5); `0x85` o el límite
+de 8 pasos cierran la sesión. Solo lectura por defecto; `AGENTE ESCRITURA ON` habilita
+CREAR/MKDIR/RM/REN/COPY. Nuevos `include/agent.h`, `src/agent.c`, `scripts/ai_agent.py`
+y `make test-agent`. `console_capture_*` añade la captura acotada de consola.
+TC/1 mantiene versión 1: los tipos nuevos conviven con 1/2/3, 0x81/0x82/0xff.
+Correcciones de la auditoría aplicadas: cota en collect_functions(), literales numéricos
+en unsigned con saturación, -INT64_MIN sin desbordamiento, last_return_val reiniciado por
+invocación, borrado de dos celdas en console_erase_last(), cola de teclado de 16 bytes y
+editor que compara comandos sin distinguir mayúsculas. Ver docs/auditoria/REVISION_FUNCIONES.md §8
+para las fichas no aplicadas y su motivo. `test_all.py` incorpora el paso `ai-agent` y el
+`Makefile` expone `SAN` para ejecutar las pruebas de host en distribuciones sin libasan/libubsan.
+
+## 2026-11-02 HELP en dos columnas
+Reorganizado el HELP: secciones por categoría con sangría, órdenes en la columna 4 y
+descripciones alineadas en la 28, todo dentro de las 42 filas de la consola. Se conservan
+los mismos comandos y textos que verifica `scripts/test_presentation.py`.
+
+## 2026-11-03 V3.2 escritorio claro, red, ratón y apps ELF
+Interfaz gráfica de tema claro con doble buffer en el PMM, tema centralizado y
+recorte por superficie; perfiles 1920x1080 y 1280x800 seleccionables con
+`make iso RES=...`. Tipografías horneadas en el anfitrión (6 tamaños, 4bpp) e
+iconos procedurales escalados por enteros. Ratón PS/2 por IRQ12 con
+resincronización y sondeo de respaldo; el touchpad se declara como
+compatibilidad PS/2 relativa. Driver PCI RTL8139 con MAC, ARP, RX 8 KiB, TX
+2 KiB e IP fija 10.0.2.15/24. Cargador ELF64 para PIE estáticos que localiza
+`.rela.dyn` por cabeceras de sección y aplica `R_X86_64_RELATIVE`; las apps usan
+`host_api_t` (ABI 2) y `elf_abort()` las devuelve al kernel si fallan. Nuevos
+comandos `GUI`, `GUI DEMO`, `GUI RUN <n>`, `RED`, `RATON` y `ELF`; prueba
+`make test-gui` sin capturas (marcadores serie + QMP). El driver de teclado
+entrega ESC (scancode 0x01) como 27, que antes se descartaba.
+
+## 2026-11-03 Perfil grafico compacto por defecto
+`RES` pasa a 1280x800 para que la ventana del escritorio ocupe menos; 1920x1080
+sigue disponible con `make run RES=1920x1080`. `limine.conf` versionado declara
+1280x800x32. `make run`, `debug`, `trace` y `uefi` abren QEMU con
+`-display gtk,zoom-to-fit=on` (`DISPLAY_QEMU`) para ajustar la ventana a la
+pantalla del anfitrion sin cambiar el modo del huesped. `make test-gui` validado
+en ambos perfiles.
+
+## 2026-11-03 Fluidez del escritorio, ventanas ampliadas y apps de editor/terminal
+Eliminado el parpadeo y el retardo del puntero: el escritorio repinta solo el
+rectangulo marcado como sucio (`invalidate`, `redraw_region`, `flush_region`), el
+fondo es un gradiente precalculado en vez de mezcla por pixel, las sombras usan
+relleno solido y el bucle duerme con `sti; hlt` cuando no hay eventos. El cursor
+se pinta en el dispositivo y se restaura desde el back buffer. Las apps solo
+llaman a `present()` cuando llega un evento. Medido con `test_gui.py`: la sesion
+grafica completa (apertura, movimientos, clic y salida) tarda ~0.5 s.
+QEMU deja de estar mal configurado: nuevo `scripts/qemu_config.py` compartido por
+Makefile, `qemu_test.py`, `smoke_test.py`, `test_gui.py` y `run_vm.py`, con KVM
+automatico (`-accel kvm -cpu host`, TCG `-cpu max` como respaldo), 32 MiB de
+memoria de video, `-rtc base=utc,clock=host` y disco con `cache=writeback`.
+La ventana Sistema muestra CPU y nucleos por CPUID, RAM libre, heap, procesos e
+hilos, uptime, resolucion, red, raton, teclado, despachos y archivos. La ventana
+Archivos navega con flechas, abre un visor, crea archivos y carpetas, renombra y
+borra. `host_api_t` sube a ABI 3 (FS completo, `exec` y teclas extendidas).
+`hola.elf` se retira: `apps/editor.c` y `apps/terminal.c` la sustituyen y
+`limine.conf` publica editor, terminal y pintar. `test_gui.py` comprueba los tres
+modulos, la latencia de la sesion y `help` ejecutado desde la terminal; `test_all.py`
+incorpora el paso `gui`. Validado con `test_gui`, `test_core`, `test_files_editor`,
+`test_presentation`, `test_utf8_keyboard` y `smoke_test`.
+
+## 2026-11-03 Ventana HD y conectividad IPv4
+El perfil por defecto pasa de 1280x800 a 1920x1080 para que la ventana de QEMU
+llene una pantalla Full HD; se anade `FULLSCREEN=1`/`--fullscreen` (y
+`QEMU_FULLSCREEN=1`) que pasa `-full-screen`, y el perfil compacto sigue en
+`make iso RES=1280x800`. `run_vm.py` imprime el comando efectivo.
+El RTL8139 gana IPv4 con checksum RFC 1071, eco ICMP con RTT medido por el PIT y
+DNS por UDP contra 10.0.2.3, con compresion de nombres al leer la respuesta.
+Nuevos comandos `RED PING <ip>`, `RED DNS <nombre>` y `RED INTERNET`; la ventana
+Red muestra puerta, DNS, ultimo ping y ultimo nombre resuelto.
+Se corrige la transmision: el chip rota entre cuatro descriptores y escribir
+siempre `TSD0` dejaba la cola parada; ahora se usan cuatro buffers de 2 KiB con
+`TSAD0-3`/`TSD0-3` rotados. El estado de enlace se lee de `BMSR` (0x64) en lugar
+de `MSR`. Verificado en QEMU: `RED ARP` responde, `RED PING 10.0.2.2` devuelve
+RTT y `RED DNS example.com`/`RED INTERNET` resuelven con Internet del anfitrion.
+`test_gui.py` comprueba ARP, el eco a la puerta y el envio de la consulta DNS.
+
+## 2026-11-03 Reloj en la barra y retirada de la app de dibujo
+La barra superior muestra la hora local en formato `HH:MM`, leida del CMOS por
+`src/rtc.c` (`rtc_now`/`rtc_text`: BCD o binario, 12/24 h y espera al refresco).
+QEMU pasa a `-rtc base=localtime,clock=host` en el `Makefile` y en
+`scripts/qemu_config.py`, asi que la hora coincide con el anfitrion. La barra solo
+se repinta cuando cambia el minuto y el nuevo comando `HORA`/`TIME` imprime
+`HH:MM:SS DD/MM/AAAA`. Se retira `apps/pintar.c` y su modulo de `limine.conf`;
+`test_gui.py` valida ahora el reloj por COM1 y solo exige `editor.elf` y
+`terminal.elf`.

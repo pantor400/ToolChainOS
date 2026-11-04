@@ -127,5 +127,53 @@ make BUILD=/tmp/qos-verify iso      # compila sin tocar build/
 make test-memory-host               # PMM y heap con ASan/UBSan
 make test-utf8-host                 # UTF-8, teclado, glifos y FS
 make test-scheduler-host            # cambios de contexto
+make test-agent                     # agente de bajo nivel (QEMU)
 make test-all                       # regresión completa en QEMU
 ```
+
+`SAN ?= address,undefined` en el `Makefile`: en distribuciones sin `libasan` ni
+`libubsan` (Fedora sin el paquete de sanitizers) los objetivos de host se
+ejecutan con `make SAN= test-memory-host`, sin cambiar aserciones ni código.
+
+## 8. Estado de aplicación (agente de bajo nivel)
+
+Aplicado en esta revisión:
+
+| # | Cambio |
+|---|---|
+| 1 | `collect_functions()` corta en `MAX_FUNCS` con `set_error` y `cpp_run_script()` comprueba el retorno. |
+| 3 | Los literales numéricos se acumulan en `uint64_t` y saturan en `INT64_MAX`; `-INT64_MIN` satura en vez de desbordar. |
+| 4 | `last_return_val = 0` antes de cada invocación: una función sin `return` ya no hereda el valor anterior. |
+| 5 | `console_erase_last()` repinta una celda por columna; no quedan glifos fantasma con ancho 2. |
+| 6 | Cola del teclado de 16 bytes: un escalar UTF-8 de 4 bytes siempre cabe entero. |
+| 11 | El editor compara `:q`, `:wq`, `:clear` y `:show` con `ci_same()`, igual que la shell. |
+
+No aplicado, con motivo verificado en el código actual:
+
+| # | Motivo |
+|---|---|
+| 2 | Cambiar el retorno de `tokenize()` haría fallar scripts que hoy se aceptan al ignorar caracteres desconocidos; exige su propia migración y pruebas. |
+| 7 | El orden actual (marca y luego letra) es lo que comprueba `scripts/test_utf8_host.c:46` con `expect("´b")` y coincide con un teclado real; la ficha era incorrecta. |
+| 8 | `dirty` **sí** se activa (`storage.c:82`) y se limpia al confirmar (`storage.c:89`); `DIRTY=YES` significa «cambio solo en RAM». La ficha estaba desactualizada. |
+| 9 | Es coste, no corrección: `heap_check()` en cada `kmalloc()` detecta corrupción. Dejarlo tras `HEAP_DEBUG` es una optimización pendiente, no un fallo. |
+| 10 | `n == 32` significa que el heap de 512 KiB **no** llegó a agotarse, así que marcar fallo es la condición correcta; la ficha invertía la intención. |
+| 12 | `CANCELAR` mantiene su semántica; se documenta aquí en lugar de cambiar el comportamiento de las entradas guiadas. |
+
+## 9. Agente de bajo nivel (módulo nuevo)
+
+| Archivo | Responsabilidad |
+|---|---|
+| `include/agent.h`, `src/agent.c` | Lista blanca por prefijo, lotes de hasta 4 órdenes, rechazo explicado y captura de la salida real. |
+| `src/console.c` | `console_capture_begin()` / `console_capture_end()`: copia acotada de todo lo que se escribe en consola. |
+| `src/ai_serial.c` | Extensión de `TC/1` sin cambiar la versión: tipo 4 (inicio), tipo 5 (observación), `0x84` (orden), `0x85` (fin), 8 pasos y timeout por paso. |
+| `src/kernel.c` | `AGENTE <objetivo>`, `AGENTE ESCRITURA ON|OFF`, `agent_runner()` y `agent_bind()`. |
+| `scripts/ai_agent.py` | Cliente del agente: espejo de la lista blanca, prompt al modelo y registro de cada paso. |
+| `scripts/test_agent.py` | Prueba en QEMU: sesión de solo lectura, rechazo de `halt` sin detener la VM y escritura explícita. |
+| `scripts/test_all.py`, `Makefile` | Paso `ai-agent` dentro de la regresión y variable `SAN` para los sanitizers del anfitrión. |
+
+Invariantes del diseño:
+
+- Sin `agent_bind()` no hay ejecución: el agente nunca adivina el despachador.
+- `agent_runner()` fuerza `state = COMMAND` antes y después: una orden no puede dejar la shell en una entrada guiada.
+- La lista blanca exige argumento en `OPEN`, `CD`, `COLOR`, `FONDO`, `SUMA`, `ECO`, `TEXTO`, `RUN CPP` y en todas las de escritura, para no abrir prompts interactivos.
+- Se rechazan `;`, `|`, `&`, `` ` ``, `$`, `>` y `<`: una orden es una entrada, no una shell.

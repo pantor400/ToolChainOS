@@ -25,6 +25,8 @@ typedef struct fs_node {
 
 void fs_init(void);
 int fs_set_cwd(int idx);
+/* Indice del directorio actual: la ventana Archivos lista sus hijos. */
+int fs_cwd(void);
 void fs_get_cwd_path(char *buf, size_t max_len);
 
 int fs_mkdir(const char *dir_path, const char *name, char *err_msg, size_t err_size);

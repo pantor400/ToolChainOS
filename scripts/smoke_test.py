@@ -2,9 +2,10 @@
 """Pruebas reales por UART: arranque, parser, suma, texto y comandos de color."""
 import os,select,subprocess,time
 from pathlib import Path
+import qemu_config
 iso=Path('build/toolchain-os.iso')
 if not iso.exists():raise SystemExit('Primero ejecuta make iso')
-q=subprocess.Popen(['qemu-system-x86_64','-machine','q35','-vga','std','-m','256M','-cdrom',str(iso),'-boot','d','-nic','none','-display','none','-serial','stdio','-monitor','none','-no-reboot','-no-shutdown'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+q=subprocess.Popen(qemu_config.base(iso=iso)+['-nic','none']+qemu_config.display('none')+qemu_config.serial_stdio(),stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 output=bytearray();transcript=bytearray()
 def until(needle,seconds=30):
     deadline=time.monotonic()+seconds

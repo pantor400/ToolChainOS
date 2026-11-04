@@ -2,6 +2,9 @@
 #define TASKS_H
 #include <stdint.h>
 typedef enum {TS_UNUSED,TS_NEW,TS_READY,TS_RUNNING,TS_WAITING,TS_TERMINATED} thread_state_t;
+/* Resumen para la ventana Sistema: procesos vivos, hilos y despachos. */
+typedef struct {unsigned processes,threads;uint64_t dispatches;} tasks_info_t;
+tasks_info_t tasks_info(void);
 void tasks_init(void);
 void tasks_poll(void);
 void tasks_command(const char *arg);

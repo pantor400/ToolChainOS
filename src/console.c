@@ -14,6 +14,26 @@ static uint64_t col,row,cols,rows;
 static uint32_t fg,bg;
 static uint32_t cells[MAX_ROWS][MAX_COLS];
 static utf8_state_t output_state;
+static int screen_off;
+/* Captura opcional del agente: una sola sesion a la vez. */
+static char *capture_buffer;
+static size_t capture_capacity,capture_used,capture_dropped;
+void console_capture_begin(char *buffer,size_t capacity){
+    if(capture_buffer||!buffer||!capacity)return;
+    capture_buffer=buffer;capture_capacity=capacity;capture_used=0;capture_dropped=0;buffer[0]=0;
+}
+size_t console_capture_end(void){
+    size_t dropped=capture_dropped;
+    if(capture_buffer)capture_buffer[capture_used]=0;
+    capture_buffer=0;capture_capacity=capture_used=capture_dropped=0;
+    return dropped;
+}
+static void capture(const char *bytes,unsigned n){
+    for(unsigned i=0;i<n;i++){
+        if(capture_used+1>=capture_capacity){capture_dropped++;continue;}
+        capture_buffer[capture_used++]=bytes[i];
+    }
+}
 void serial_init(void){
     outb(COM1+1,0);outb(COM1+3,0x80);outb(COM1,3);outb(COM1+1,0);
     outb(COM1+3,3);outb(COM1+2,0xc7);outb(COM1+4,0x0b);
@@ -34,11 +54,22 @@ static void draw_char(uint64_t x,uint64_t y,uint32_t c){
     }
 }
 static void paint_background(void){
+    if(!screen||screen_off)return;
     for(uint64_t y=0;y<screen->height;y++)for(uint64_t x=0;x<screen->width;x++)pixel(x,y,bg);
 }
+void console_suspend_screen(int suspend){
+    if(suspend==screen_off)return;
+    screen_off=suspend;
+    if(!screen_off&&screen){
+        paint_background();
+        for(uint64_t y=0;y<rows;y++)for(uint64_t x=0;x<cols;x++)if(cells[y][x])draw_char(x,y,cells[y][x]);
+    }
+}
+int console_screen_suspended(void){return screen_off;}
 int console_set_colors(uint32_t text_rgb,uint32_t background_rgb){
     if(!screen)return 0;
     fg=rgb(text_rgb);bg=rgb(background_rgb);paint_background();
+    if(screen_off)return 1;
     for(uint64_t y=0;y<rows;y++)for(uint64_t x=0;x<cols;x++)if(cells[y][x])draw_char(x,y,cells[y][x]);
     return 1;
 }
@@ -69,7 +100,7 @@ static void scroll(void){
     row=rows-1;
 }
 static void graphical(uint32_t c){
-    if(!screen)return;
+    if(!screen||screen_off)return;
     if(c=='\n'){col=0;row++;scroll();return;}
     if(c=='\r'){col=0;return;}
     if(c=='\b'){
@@ -81,8 +112,9 @@ static void graphical(uint32_t c){
 }
 void console_erase_last(uint32_t c){
     unsigned width=utf8_columns(c);
-    for(unsigned i=0;i<width;i++){serial_char('\b');serial_char(' ');serial_char('\b');}
-    graphical('\b');
+    /* El terminal retrocede un byte por columna; la rejilla debe retroceder
+     * el mismo numero de celdas o queda un glifo fantasma en framebuffer. */
+    for(unsigned i=0;i<width;i++){serial_char('\b');serial_char(' ');serial_char('\b');graphical('\b');}
 }
 void console_put_unicode(uint32_t c){
     if(c=='\b'){console_erase_last(' ');return;}
@@ -92,6 +124,7 @@ void console_put_unicode(uint32_t c){
     char bytes[4];unsigned n=utf8_encode(c,bytes);
     if(c=='\n')serial_char('\r');
     for(unsigned i=0;i<n;i++)serial_char(bytes[i]);
+    if(capture_buffer)capture(bytes,n);
     graphical(c);
 }
 void console_putc(char c){

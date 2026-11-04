@@ -13,8 +13,15 @@
 #include "ata.h"
 #include "storage.h"
 #include "ai_serial.h"
+#include "agent.h"
 #include "keyboard.h"
 #include "utf8.h"
+#include "gui.h"
+#include "mouse.h"
+#include "net.h"
+#include "rtc.h"
+#include "elf_loader.h"
+#include "shell.h"
 /* KEEP en linker.ld conserva estas solicitudes incluso con --gc-sections. */
 __attribute__((used,section(".limine_requests_start")))
 static volatile LIMINE_REQUESTS_START_MARKER
@@ -27,6 +34,7 @@ REQUEST static volatile struct limine_memmap_request memmap={.id=LIMINE_MEMMAP_R
 REQUEST static volatile struct limine_kernel_address_request address={.id=LIMINE_KERNEL_ADDRESS_REQUEST,.revision=0};
 REQUEST static volatile struct limine_bootloader_info_request bootinfo={.id=LIMINE_BOOTLOADER_INFO_REQUEST,.revision=0};
 REQUEST static volatile struct limine_stack_size_request stack={.id=LIMINE_STACK_SIZE_REQUEST,.revision=0,.stack_size=65536};
+REQUEST static volatile struct limine_module_request modules={.id=LIMINE_MODULE_REQUEST,.revision=0};
 __attribute__((used,section(".limine_requests_end")))
 static volatile LIMINE_REQUESTS_END_MARKER
 /* Definiciones en cpu.asm; ld resuelve estas referencias entre los objetos. */
@@ -115,6 +123,39 @@ static void sum_result(int64_t a,int64_t b){
 }
 static void number_error(void){console_write("USA UN ENTERO ENTRE -1000000000 Y 1000000000.\n");}
 static void colors(void){console_write("VERDE AZUL ROJO AMARILLO BLANCO MORADO CIAN\n");}
+/* GUI: la consola cede el framebuffer y sigue informando por el puerto serie.
+ * DEMO dibuja un unico fotograma y vuelve, util sin servidor grafico. */
+static void gui_command(const char *args){
+    const char *argument=skip_spaces(args);
+    if(gui_active()){console_write("GUI: YA HAY UNA SESION GRAFICA ACTIVA.\n");return;}
+    struct limine_framebuffer *fb=(framebuffer.response&&framebuffer.response->framebuffer_count)
+        ?framebuffer.response->framebuffers[0]:0;
+    if(!fb){console_write("GUI: EL CARGADOR NO ENTREGO FRAMEBUFFER.\n");return;}
+    if(!gui_init(fb)){console_write("GUI: FRAMEBUFFER O MEMORIA NO COMPATIBLES.\n");return;}
+    console_write("GUI_READY RES=");console_dec(fb->width);console_putc('x');console_dec(fb->height);console_putc('\n');
+    if(equal(argument,"DEMO")){
+        console_write("GUI_FRAME\n");
+        gui_shutdown();
+        return;
+    }
+    /* GUI RUN <indice>: abre la interfaz y ejecuta una aplicacion ELF como
+     * si se hubiera pulsado en la ventana de aplicaciones. */
+    char first[8];size_t used=0;
+    while(argument[used]&&argument[used]!=' '&&used+1<sizeof(first)){first[used]=argument[used];used++;}
+    first[used]=0;
+    if(ci_same(first,"RUN")){
+        const char *rest=skip_spaces(argument+used);
+        uint64_t index=0;
+        if(!udecimal(rest,&index)){
+            console_write("USO: GUI RUN <INDICE>.\n");
+            elf_list();
+        }else elf_run((unsigned)index);
+        gui_shutdown();
+        return;
+    }
+    gui_run();
+}
+
 static int color(const char *name){
     uint32_t rgb;
     if(equal(name,"VERDE"))rgb=0x76ed92;
@@ -157,46 +198,75 @@ static void run_cpp_path(const char *path){
         console_putc('\n');
     }
 }
+/* AGENTE: el operador fija el objetivo y el puente propone las ordenes.
+ * ESCRITURA queda deshabilitada por defecto; el operador la concede. */
+static void agent_cli(const char *args){
+    const char *s=skip_spaces(args);
+    if(!*s){agent_catalog();console_write("USO: AGENTE <OBJETIVO> | AGENTE ESCRITURA ON|OFF\n");return;}
+    char first[16];size_t i=0;
+    while(s[i]&&s[i]!=' '&&i+1<sizeof(first)){first[i]=s[i];i++;}
+    first[i]=0;
+    if(ci_same(first,"ESCRITURA")){
+        const char *value=skip_spaces(s+i);
+        if(ci_same(value,"ON")){agent_allow_writes(1);console_write("AGENTE: ESCRITURA HABILITADA (CREAR MKDIR RM REN COPY).\n");}
+        else if(ci_same(value,"OFF")){agent_allow_writes(0);console_write("AGENTE: SOLO LECTURA.\n");}
+        else console_write("USO: AGENTE ESCRITURA ON|OFF\n");
+        return;
+    }
+    ai_agent_start(s);
+}
 static void help(void){
+    /* Dos columnas: la orden empieza en la columna 4 y la descripcion en la 28.
+     * 40 lineas caben en las 42 filas de la consola, sin scroll. */
     console_write(
-        "============================================================\n"
-        "HELP - COMANDOS DE TOOLCHAIN OS V3.1 E56\n"
-        "[SISTEMA Y UTILIDADES]\n"
-        "TECLADO [ES|US|1|2] - MAPA PS/2; SERIAL RECIBE UTF-8 DEL ANFITRION\n"
-        "HELP | INFO | MEM | UPTIME - AYUDA, SISTEMA, MEMORIA Y RELOJ\n"
-        "SUMA [a b] | TEXTO [texto] | ECO texto - ENTRADA DIRECTA/GUIADA\n"
-        "COLOR [nombre] | FONDO [nombre] - COLORES DE CONSOLA\n"
-        "LIMPIAR - BORRAR PANTALLA | HALT - DETENER CPU HUESPED\n"
-        "[SISTEMA DE ARCHIVOS]\n"
-        "LS / DIR [ruta] | PWD | CD [ruta] - LISTAR Y NAVEGAR\n"
-        "MKDIR [ruta] | CREAR [ruta texto] - CREAR (TAMBIEN GUIADO)\n"
-        "OPEN [archivo] | EDIT archivo - LEER O EDITAR TEXTO\n"
-        "RM archivo | RMDIR carpeta_vacia - ELIMINAR\n"
-        "REN ruta nuevo_nombre | COPY origen destino - COPIAR SIN SOBRESCRIBIR\n"
-        "TREE [ruta] - MOSTRAR ARBOL DE ARCHIVOS\n"
-        "ALIAS: CREAR_CARPETA, CREAR_ARCHIVO, TOUCH\n"
-        "CANCELAR - SALIR DE ENTRADAS GUIADAS (FUERA DEL EDITOR)\n"
-        "[EDITOR: SOLO DENTRO DE EDIT>]\n"
-        ":show | :clear | :line N texto | :del N\n"
-        ":wq - GUARDAR Y SALIR | :q - CANCELAR SIN GUARDAR\n"
-        "LAS DEMAS LINEAS SON TEXTO; BACKSPACE CORRIGE LA ENTRADA\n"
-        "[MEMORIA, INTERRUPCIONES Y TAREAS]\n"
-        "MEMSTATS | PMMTEST - ESTADISTICAS Y PRUEBA DE PAGINAS\n"
-        "HEAPSTATS | HEAPTEST | MEMMAP - HEAP Y MAPA LIMINE\n"
-        "PS | THREADS | SCHED | SCHED TEST | PROC TEST - PROCESOS KERNEL Y RR\n"
-        "TASKS | TASKS START - ESTADOS E INICIO DE TAREAS COOPERATIVAS\n"
-        "UPTIME - TICKS PIT | EXTEST DE/PF - EXCEPCION FATAL DE PRUEBA\n"
-        "[DISCO Y PERSISTENCIA]\n"
-        "DISK INFO | DISK READ <LBA> | DISK MBR | DISK TEST\n"
-        "FSSTATUS - ESTADO RAM/DISCO; TEST SOLO EN IMAGEN AUTORIZADA\n"
-        "[INTERPRETE DE SCRIPTS]\n"
-        "RUN CPP [archivo] | RUN_CPP [archivo] - C++ LIMITADO, SIN LIBRERIAS\n"
-        "[INTELIGENCIA ARTIFICIAL - OLLAMA POR COM2]\n"
-        "PARA USAR LA INTELIGENCIA ARTIFICIAL, ESCRIBE IA SEGUIDO DE TU PREGUNTA.\n"
-        "IA <PREGUNTA> | IA STATUS | IA CANCEL\n"
-        "EJEMPLO: IA Que es un sistema operativo?\n"
-        "REQUIERE SERVIDOR OLLAMA Y PUENTE COM2 ACTIVOS EN LINUX.\n"
-        "============================================================\n"
+        "====================================================================\n"
+        "  AYUDA - TOOLCHAIN OS V3.1 E56\n"
+        "====================================================================\n"
+        "  SISTEMA Y UTILIDADES\n"
+        "    TECLADO [ES|US|1|2]    MAPA PS/2; LA SERIE RECIBE UTF-8\n"
+        "    HELP | INFO | MEM      AYUDA, SISTEMA, MEMORIA Y TICKS (UPTIME)\n"
+        "    SUMA [a b] | TEXTO     SUMA Y ENTRADA GUIADA; ECO REPITE\n"
+        "    COLOR [nombre]         COLOR DE TEXTO; FONDO [nombre]\n"
+        "    LIMPIAR | HALT         BORRAR PANTALLA / DETENER CPU\n"
+        "  SISTEMA DE ARCHIVOS\n"
+        "    LS / DIR [ruta]        LISTAR; TREE [ruta] MUESTRA EL ARBOL\n"
+        "    PWD | CD [ruta]        RUTA ACTUAL Y CAMBIO DE DIRECTORIO\n"
+        "    MKDIR [ruta]           CARPETA; ALIAS CREAR_CARPETA\n"
+        "    CREAR [ruta texto]     ARCHIVO; ALIAS CREAR_ARCHIVO, TOUCH\n"
+        "    OPEN [archivo]         LEER; EDIT archivo ABRE EL EDITOR\n"
+        "    RM | RMDIR | REN       BORRAR Y RENOMBRAR\n"
+        "    COPY origen destino    COPIAR; CANCELAR SALE DE ENTRADA GUIADA\n"
+        "  EDITOR - SOLO DENTRO DE EDIT>\n"
+        "    :show | :clear         VER Y LIMPIAR; :line N texto, :del N\n"
+        "    :wq                    GUARDAR Y SALIR; :q DESCARTA\n"
+        "    EL RESTO ES TEXTO; BACKSPACE CORRIGE LA ENTRADA\n"
+        "  MEMORIA, INTERRUPCIONES Y TAREAS\n"
+        "    MEMSTATS | PMMTEST     PAGINAS; HEAPSTATS | HEAPTEST | MEMMAP\n"
+        "    PS | THREADS           PROCESOS E HILOS DEL KERNEL\n"
+        "    SCHED                  ESTADO RR; SCHED TEST PRUEBA CAMBIO\n"
+        "    PROC TEST | TASKS      DEMOSTRACION; TASKS START INICIA\n"
+        "    EXTEST DE/PF           EXCEPCION FATAL DE PRUEBA\n"
+        "  DISCO, PERSISTENCIA E INTERPRETE\n"
+        "    DISK INFO | DISK MBR   ESTADO Y ARRANQUE; DISK TEST PRUEBA\n"
+        "    DISK READ <LBA>        LEER SECTOR; FSSTATUS RAM FRENTE A DISCO\n"
+        "    RUN CPP [archivo]      INTERPRETE C LIMITADO; ALIAS RUN_CPP\n"
+        "  INTERFAZ GRAFICA, RED Y APLICACIONES\n"
+        "    GUI | ESCRITORIO        ABRE LA INTERFAZ; GUI DEMO UN FOTOGRAMA\n"
+        "    RATON                   RATON/TOUCHPAD PS/2: POSICION Y BOTONES\n"
+        "    HORA | TIME             HORA LOCAL DEL ANFITRION (TAMBIEN EN LA BARRA)\n"
+        "    RED [ARP]               RTL8139: MAC, ENLACE Y ARP A LA PUERTA\n"
+        "    RED PING <ip> | DNS x    ICMP ECO Y RESOLUCION DNS (10.0.2.15)\n"
+        "    RED INTERNET           PRUEBA PUERTA Y DNS CONTRA LA RED DE QEMU\n"
+        "    ELF | ELF RUN <n>       APLICACIONES ELF64 DE LOS MODULOS\n"
+        "  INTELIGENCIA ARTIFICIAL - OLLAMA POR COM2\n"
+        "    IA <PREGUNTA>          CONSULTA; IA STATUS VERIFICA EL PUENTE\n"
+        "    IA CANCEL              ABORTA LA CONSULTA EN CURSO\n"
+        "    AGENTE <objetivo>      LA IA EJECUTA ORDENES EN LA CONSOLA\n"
+        "    AGENTE ESCRITURA       ON|OFF HABILITA CAMBIOS EN EL FS\n"
+        "    PARA USAR LA INTELIGENCIA ARTIFICIAL, ESCRIBE IA SEGUIDO DE TU PREGUNTA.\n"
+        "    EJEMPLO: IA Que es un sistema operativo?\n"
+        "    REQUIERE SERVIDOR OLLAMA Y PUENTE COM2 ACTIVOS EN LINUX.\n"
+        "====================================================================\n"
     );
 }
 static void prompt(void){
@@ -291,9 +361,22 @@ static void execute(char *line){
     args=(char*)skip_spaces(args);
     if(equal(cmd,"TECLADO"))keyboard_command(args);
     else if(equal(cmd,"IA"))ai_command(args);
+    else if(equal(cmd,"AGENTE"))agent_cli(args);
     else if(equal(cmd,"DISK"))disk_command(args);
     else if(equal(cmd,"FSSTATUS"))storage_status();
     else if(equal(cmd,"TASKS"))tasks_command(args);
+    else if(equal(cmd,"GUI")||equal(cmd,"ESCRITORIO"))gui_command(args);
+    else if(equal(cmd,"RATON")||equal(cmd,"MOUSE"))mouse_command(args);
+    else if(equal(cmd,"HORA")||equal(cmd,"TIME")){
+        char stamp[40];
+        if(rtc_text_full(stamp,sizeof(stamp))){
+            console_write("HORA: ");console_write(stamp);
+            console_write(" (RELOJ CMOS DEL ANFITRION)\n");
+        }
+        else console_write("HORA: EL RELOJ CMOS NO DEVUELVE UN VALOR VALIDO.\n");
+    }
+    else if(equal(cmd,"RED")||equal(cmd,"NET"))net_command(args);
+    else if(equal(cmd,"ELF")||equal(cmd,"APPS"))elf_command(args);
     else if(equal(cmd,"PS"))process_list();
     else if(equal(cmd,"THREADS"))thread_list();
     else if(equal(cmd,"SCHED"))scheduler_command(args);
@@ -357,9 +440,14 @@ static void execute(char *line){
         char *sub_arg=sub;while(*sub_arg&&*sub_arg!=' ')sub_arg++;
         if(*sub_arg)*sub_arg++=0;
         sub_arg=(char*)skip_spaces(sub_arg);
-        if(!equal(sub,"CPP"))console_write("USO: RUN CPP <SCRIPT>\n");
-        else if(!*sub_arg)state=RUN_CPP_INPUT;
-        else run_cpp_path(sub_arg);
+        if(equal(sub,"CPP")){
+            if(!*sub_arg)state=RUN_CPP_INPUT;
+            else run_cpp_path(sub_arg);
+        }else if(equal(sub,"ELF")){
+            uint64_t index=0;
+            if(!*sub_arg||!udecimal(sub_arg,&index)){console_write("USO: RUN ELF <INDICE>.\n");elf_list();return;}
+            elf_run((unsigned)index);
+        }else console_write("USO: RUN CPP <SCRIPT> | RUN ELF <INDICE>\n");
     }else if(equal(cmd,"RUN_CPP")){
         if(!*args)state=RUN_CPP_INPUT;
         else run_cpp_path(args);
@@ -423,6 +511,40 @@ static void execute(char *line){
     else if(equal(cmd,"HALT")){console_write("CPU DETENIDA. CIERRA QEMU PARA SALIR.\n");asm_detener();}
     else if(*cmd)console_write("COMANDO DESCONOCIDO. ESCRIBE HELP.\n");
 }
+/* Terminal grafica: reutiliza el despachador real en vez de duplicar ordenes.
+ * La salida se captura en el bufer del llamador y las ordenes que abren otra
+ * sesion grafica o paran la CPU se rechazan. */
+int shell_exec(const char*line,char*out,size_t capacity){
+    if(!line||!out||!capacity)return 0;
+    while(*line==' ')line++;
+    if(!*line){out[0]=0;return 0;}
+    if(editor_active()){copystr(out,"TERMINAL: EL EDITOR DE CONSOLA ESTA ABIERTO.",capacity);return -1;}
+    char first[12];size_t used=0;
+    while(line[used]&&line[used]!=' '&&used+1<sizeof(first)){first[used]=line[used];used++;}
+    first[used]=0;
+    if(ci_same(first,"GUI")||ci_same(first,"ESCRITORIO")||ci_same(first,"HALT")){
+        copystr(out,"ORDEN NO DISPONIBLE DESDE LA TERMINAL GRAFICA.",capacity);return -1;
+    }
+    char copy[192];size_t length=slen(line);
+    if(length>=sizeof(copy))length=sizeof(copy)-1;
+    for(size_t i=0;i<length;i++)copy[i]=line[i];
+    copy[length]=0;
+    state=COMMAND;
+    console_capture_begin(out,capacity);
+    execute(copy);
+    console_capture_end();
+    if(state!=COMMAND){state=COMMAND;console_write("TERMINAL: ENTRADA GUIADA OMITIDA.\n");}
+    return 1;
+}
+/* Puente entre la lista blanca del agente y el despachador del shell:
+ * nunca deja la shell en una entrada guiada a medias. */
+static void agent_runner(char *line){
+    if(editor_active()){console_write("AGENTE: EDITOR ABIERTO; ORDEN OMITIDA.\n");return;}
+    state=COMMAND;
+    execute(line);
+    if(state!=COMMAND){state=COMMAND;console_write("AGENTE: ENTRADA GUIADA OMITIDA.\n");}
+    storage_sync();
+}
 void kmain(void){
     __asm__ volatile("cli");
     serial_init();
@@ -437,11 +559,17 @@ void kmain(void){
     fs_init();
     ata_init();
     storage_init();
+    mouse_init();
+    net_init();
+    elf_init(modules.response);
+    agent_bind(agent_runner);
     console_write("\n============================================================\n");
     console_write("TOOLCHAIN OS V3.1 E56 - SISTEMA OPERATIVO X86-64\n");
     console_write("BIENVENIDO AL LABORATORIO DE SISTEMAS OPERATIVOS\n");
     console_write("C + NASM + LD + MAKE + LIMINE + QEMU\n");
     console_write("KERNEL EDUCATIVO | ARCHIVOS | MEMORIA | TAREAS | PERSISTENCIA\n");
+    console_write("INTERFAZ GRAFICA CLARA, RATON PS/2, RED RTL8139 Y APPS ELF64\n");
+    console_write("ESCRIBE GUI PARA ABRIR EL ESCRITORIO.\n");
     console_write("INTEGRACION IA: OLLAMA MEDIANTE PUENTE LINUX Y COM2\n");
     console_write("PARA CONSULTAR A LA IA: IA <PREGUNTA>\n");
     console_write("REQUIERE SERVIDOR OLLAMA Y PUENTE COM2 ACTIVOS.\n");
@@ -453,7 +581,7 @@ void kmain(void){
     utf8_state_t input={0};
     for(;;){
         tasks_poll();
-        if(ai_poll())prompt();
+        if(ai_poll()&&!ai_busy())prompt();
         int c=console_read();if(c<0){__asm__ volatile("pause");continue;}
         if(c=='\n'&&previous_was_cr){previous_was_cr=0;continue;}
         previous_was_cr=(c=='\r');
@@ -463,7 +591,10 @@ void kmain(void){
             if(overflow)console_write("ERROR: LINEA DEMASIADO LARGA; DESCARTADA.\n");
             else if(invalid_utf8)console_write("ERROR: UTF-8 INVALIDO; LINEA DESCARTADA.\n");
             else {execute(line);storage_sync();}
-            used=0;overflow=invalid_utf8=0;input.count=0;prompt();
+            used=0;overflow=invalid_utf8=0;input.count=0;
+            /* Con una sesion de agente abierta no se pide prompt: el turno lo
+             * tiene el puente y la shell volvera al terminar. */
+            if(!ai_busy())prompt();
         }else if(c=='\b'||c==127){
             if(input.count){input.count=0;continue;}
             if(!overflow&&used){

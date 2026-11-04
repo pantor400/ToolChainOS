@@ -16,6 +16,7 @@ documentos por intención y recuerda las convenciones del árbol.
 | Documento | Contenido |
 |---|---|
 | [`diseno/ARQUITECTURA.md`](diseno/ARQUITECTURA.md) | Subsistemas, mapa de memoria y flujo de arranque |
+| [`diseno/GUI_RED_APPS.md`](diseno/GUI_RED_APPS.md) | Escritorio, repintado por zonas, tema claro, assets escalables, ratón/touchpad, RTL8139, ventanas Sistema/Archivos y apps ELF64 (editor y terminal) |
 | [`diseno/DECISIONES_TECNICAS.md`](diseno/DECISIONES_TECNICAS.md) | Decisiones tomadas y alternativas descartadas |
 | [`diseno/FASES_IMPLEMENTADAS.md`](diseno/FASES_IMPLEMENTADAS.md) | Alcance de cada fase (estado histórico de V3.1) |
 | [`etapas56-diagramas/`](etapas56-diagramas/) | Diagramas de contexto, estados, memoria y Round Robin |
@@ -29,6 +30,7 @@ documentos por intención y recuerda las convenciones del árbol.
 | [`guias/GUIA_DEMOSTRACION.md`](guias/GUIA_DEMOSTRACION.md) | Guion de demostración general |
 | [`guias/GUIA_DEMOSTRACION_ETAPAS56.md`](guias/GUIA_DEMOSTRACION_ETAPAS56.md) | Guion específico de las etapas 5 y 6 |
 | [`guias/TECLADO_UTF8.md`](guias/TECLADO_UTF8.md) | Distribuciones, teclas muertas y entrada UTF-8 |
+| [`diseno/GUI_RED_APPS.md`](diseno/GUI_RED_APPS.md) | Comandos `GUI`, `GUI DEMO`, `GUI RUN n`, `RED`, `RATON`, `HORA` y `ELF`; configuración de QEMU en `scripts/qemu_config.py` |
 | [`guias/ENTREGA_DOCENTE.md`](guias/ENTREGA_DOCENTE.md) | Resumen para el docente |
 
 ## 4. Validación, evidencias e informes

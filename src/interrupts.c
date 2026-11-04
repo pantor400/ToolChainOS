@@ -1,5 +1,7 @@
 #include "interrupts.h"
 #include "console.h"
+#include "elf_loader.h"
+#include "mouse.h"
 #include "io.h"
 #include "util.h"
 struct gate {uint16_t lo,cs;uint8_t ist,flags;uint16_t mid;uint32_t hi,reserved;} __attribute__((packed));
@@ -27,7 +29,19 @@ void interrupts_init(void){
 struct frame {uint64_t r15,r14,r13,r12,r11,r10,r9,r8,rdi,rsi,rbp,rdx,rcx,rbx,rax,vector,error,rip,cs,flags;};
 void interrupt_dispatch(struct frame *f){
     if(f->vector==32){ticks++;outb(0x20,0x20);return;}
-    if(f->vector>=32&&f->vector<48){if(f->vector>=40)outb(0xa0,0x20);outb(0x20,0x20);return;}
+    if(f->vector>=32&&f->vector<48){
+        if(f->vector==44)mouse_irq(); /* IRQ12: un byte del paquete PS/2 */
+        if(f->vector>=40)outb(0xa0,0x20);
+        outb(0x20,0x20);
+        return;
+    }
+    /* Una aplicacion ELF faulty no debe detener el sistema: se descarta su
+     * pila y se vuelve al bucle de la interfaz con el codigo de error. */
+    if(elf_busy()){
+        console_write("\nAPP EXCEPTION VECTOR=");console_dec(f->vector);console_write(" ERROR=");console_hex(f->error);
+        console_write(" RIP=");console_hex(f->rip);console_write(" APLICACION ABORTADA\n");
+        elf_abort();
+    }
     console_write("\nEXCEPTION VECTOR=");console_dec(f->vector);console_write(" ERROR=");console_hex(f->error);
     console_write(" RIP=");console_hex(f->rip);
     if(f->vector==14){uint64_t cr2;__asm__ volatile("mov %%cr2,%0":"=r"(cr2));console_write(" CR2=");console_hex(cr2);}

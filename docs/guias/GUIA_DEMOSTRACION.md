@@ -61,6 +61,45 @@ La respuesta termina con IA END. La inferencia es externa al kernel y se conserv
 la consola COM1. En serial se conservan los caracteres UTF-8; la fuente gráfica
 solo cubre un repertorio latino limitado. No prometa Unicode gráfico completo.
 
+## Escritorio, red, ratón y apps ELF
+La ISO por defecto arranca a 1920x1080, de modo que la ventana de QEMU ocupa una
+pantalla Full HD; `make run FULLSCREEN=1` la abre sin decoraciones. El perfil
+compacto sigue disponible reconstruyendo con `make iso RES=1280x800`.
+~~~text
+RED
+RED PING 10.0.2.2
+RED DNS example.com
+RED INTERNET
+RATON
+ELF
+GUI
+~~~
+Con la red de usuario de QEMU (SLIRP) ya configurada, `RED PING` debe responder
+en pocos milisegundos y `RED DNS`/`RED INTERNET` dan una IPv4 si el anfitrion
+tiene Internet. Sin Internet, el DNS puede no responder: es el unico paso que
+depende del exterior.
+En el escritorio: mover el puntero, abrir Archivos, Red, Entrada y Apps desde el
+dock, arrastrar una ventana por su barra de título y cerrarla con el botón o ESC.
+Desde Apps se lanza una aplicación ELF; también directamente:
+~~~text
+GUI RUN 0
+GUI RUN 1
+~~~
+`editor.elf` (índice 0) abre un editor de texto: teclear, mover el cursor con las
+flechas y usar `TAB` para `w nombre` (guardar) u `o nombre` (abrir). `terminal.elf`
+(índice 1) ejecuta órdenes reales del shell —por ejemplo `help` o `ls`—, guarda
+historial con las flechas, `limpiar` borra la pantalla y `salir` cierra.
+Al salir, ESC devuelve el control al kernel y la serie muestra
+`ELF: FIN <nombre> CODIGO=0`.
+La barra superior muestra la hora local junto a la resolución y la IP; `HORA`
+la imprime por consola con segundos y fecha.
+En la ventana Sistema se leen CPU, núcleos, RAM, heap, tareas, red, ratón y
+uptime; en Archivos, las flechas navegan, `Enter` abre, `n` crea un archivo,
+`c` una carpeta, `r` renombra y `d` borra.
+Todo se comprueba sin capturas con `make test-gui`: marcadores COM1 conducidos
+por QMP (`GUI_READY`, `GUI_FRAME`, `IRQ_PAQUETES`, `SESION FINALIZADA`), la
+latencia de la sesión gráfica y la ejecución de `help` desde la terminal.
+
 ## Evidencia y cierre
 Mostrar seleccion-teclado.png, espanol-framebuffer.png, espanol-redibujado.png
 e ia-utf8-framebuffer.png de artifacts/final-validation/evidencias/ en el paquete.

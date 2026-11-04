@@ -76,3 +76,86 @@ Selección ES/US acotada a 3 segundos; TECLADO solo cambia PS/2 del huésped.
 Serial ya llega codificado por el anfitrión. Validación UTF-8 estricta, Backspace
 por punto de código y fuente didáctica ampliada; sin normalización/grafemas complejos.
 Protocolo COM2 y puente intactos. Pruebas actuales: ../validacion/PRUEBAS_Y_RESULTADOS.md.
+
+## V3.2 — escritorio, red y apps ELF
+Interfaz grafica de tema claro con doble buffer RGB propio en 0x00RRGGBB, no en
+MMIO. Se asigna con el PMM: 1280x800 son 4,1 MB y 1920x1080 son 8,3 MB, fuera
+del tope del heap. La conversion al framebuffer respeta los shifts de mascara y
+tiene ruta rapida para 16/8/0. El cursor se pinta directo sobre el dispositivo
+tras el volcado: sin guardar fondo no hay estelas ni lecturas de MMIO.
+Sin SSE/FPU (-mgeneral-regs-only) no se rasteriza TTF en caliente: las
+tipografias se hornean en el anfitrion con Pillow en 6 tamanos 4bpp
+(scripts/build_fonts.py) y el kernel elige juego por resolucion. Los iconos son
+procedurales sobre lienzo 24x24 escalado por enteros; no hay PNG ni decoder.
+La resolucion la fija Limine y se selecciona en build con RES=1920x1080 (perfil
+por defecto) o RES=1280x800 (compacto); no hay cambio en caliente del modo de
+video.
+Raton por i8042 + IRQ12 (0xA8, config byte, 0xF6, 0xF3 0x64, 0xE8 0x03, 0xF4),
+paquetes de 3 bytes resincronizados por el bit 3 y respaldo por sondeo. Sin
+driver Synaptics/Elan: el touchpad se anuncia como compatibilidad PS/2 relativa.
+Red: enumeracion PCI 0xCF8/0xCFC buscando 10EC:8139, solo BAR de E/S, bus
+master, RX 8 KiB+16 con WRAP y modo promiscuo, cuatro descriptores TX rotados
+(TSAD0-3/TSD0-3) e IP fija 10.0.2.15/24 con puerta 10.0.2.2 y DNS 10.0.2.3.
+Sobre Ethernet y ARP hay IPv4 (checksum RFC 1071), eco ICMP y consultas DNS por
+UDP: RED PING, RED DNS e RED INTERNET. Sin TCP/IP, DHCP, IRQ del dispositivo ni
+IPv6.
+Apps: PIE estatico sin libc; el cargador localiza .rela.dyn por cabeceras de
+seccion (sh_info==0) porque el enlace estatico no emite .dynamic, y solo aplica
+R_X86_64_RELATIVE. Trampolin NASM con pila propia y elf_abort desde el manejador
+de excepciones: una app que falla vuelve al kernel. No hay modo usuario; la
+frontera es el contrato host_api_t. Detalle: ../diseno/GUI_RED_APPS.md.
+ESC se entrega como 27 desde el teclado PS/2; la shell lo ignora y la GUI lo usa
+para cerrar la ventana o la sesion.
+
+## 2026-11-03 — fluidez, ABI 3 y QEMU
+El parpadeo tenia tres causas acumuladas: volcado completo del framebuffer en cada
+fotograma, mezcla por pixel del fondo y del sombreado, y repintado del escritorio
+por cada paquete del raton. Se sustituyen por un rectangulo sucio acumulado
+(`invalidate`/`redraw_region`/`flush_region`), un gradiente precalculado de 256
+filas y relleno solido para las sombras. El cursor se pinta en el dispositivo y
+se restaura desde el back buffer; cuando no hay eventos ni dano el bucle ejecuta
+`sti; hlt`. Las apps solo presentan al recibir un evento.
+El fondo cacheado se prefiere a redibujar el degradado: 256 filas de 32 bits se
+copian por bloques y el coste por fotograma depende solo de la zona sucia.
+`host_api_t` sube a 3 porque anade campos al final de la tabla; la app comprueba
+`abi_version` antes de usarlos y una version distinta se rechaza sin ejecutar.
+El FS se expone con las mismas funciones `fs_*` del kernel (sin copia) y `exec`
+reutiliza el despachador del shell con captura acotada de consola, rechazando
+GUI, ESCRITORIO y HALT para que una app no anide otra sesion grafica.
+QEMU se centraliza en `scripts/qemu_config.py`: KVM con CPU `host` cuando
+`/dev/kvm` es accesible y TCG con `cpu max` como respaldo, 32 MiB de memoria de
+video, reloj del anfitrion y cache de disco. Se prefiere KVM porque el coste de
+TCG (mas aun sin `mtcg`) hacia perceptible el retardo del puntero; las pruebas
+verifican el mismo comportamiento en ambos modos.
+
+## 2026-11-03 — ventana HD y red IPv4
+El huesped arrancaba a 1280x800 y en una pantalla Full HD la ventana quedaba
+pequena. Sube el perfil por defecto a 1920x1080 (sigue disponible
+`RES=1280x800`) y se anade `FULLSCREEN=1`, `--fullscreen` y `QEMU_FULLSCREEN=1`
+para pasar `-full-screen`; no se toca `zoom-to-fit`, que evita que la ventana
+recorte el modo del huesped en pantallas menores.
+La red solo tenia Ethernet + ARP, asi que "tener red" no significaba tener
+Internet. Se anade IPv4 minimo (cabecera de 20 B y checksum RFC 1071), eco ICMP
+con RTT del PIT y DNS por UDP al 10.0.2.3 con compresion de nombres, expuesto
+como `RED PING`, `RED DNS` y `RED INTERNET`.
+El fallo que impedia transmitir era doble: se escribia siempre `TSD0` (el chip
+rota entre cuatro descriptores y la cola se paraba) y el enlace se leia de `MSR`
+en lugar de `BMSR`. Se usan cuatro buffers de 2 KiB con `TSAD0-3`/`TSD0-3`
+rotados y `inw(0x64) & 4` para el enlace.
+Sin TCP/IP no hay HTTP: comprobar Internet se limita a ping y DNS, que es lo
+maximo verificable sin implementar una pila completa y sockets. `test_gui.py`
+comprueba ARP, el eco a 10.0.2.2 y el envio de la consulta DNS; la resolucion
+real depende de que el anfitrion tenga Internet.
+
+## 2026-11-03 — reloj en la barra y fin de la app de dibujo
+La barra superior mostraba resolucion e IP, pero ningun reloj. Se anade
+`src/rtc.c`, que lee el CMOS tratando el bit de actualizacion en curso, el
+formato BCD/binario y el modo 12/24 h; la barra pinta `HH:MM` a la derecha y
+solo se invalida cuando cambia el minuto, asi que el repintado por regiones
+sigue intacto. QEMU pasa de `base=utc` a `base=localtime,clock=host` para que la
+hora mostrada sea la del anfitrion y no UTC, y `HORA`/`TIME` imprime la marca
+completa por consola para poder validarla por COM1.
+Se retira `apps/pintar.c`: era una demo de trazo sin uso dentro del guion y su
+modulo ocupaba `limine.conf`. Quedan editor y terminal, que son las apps que
+usan el FS y `exec`; `test_gui.py` deja de lanzar `pintar.elf` y comprueba el
+reloj en su lugar.

@@ -17,6 +17,7 @@ static int child(int p,const char *name){
     return -1;
 }
 int fs_set_cwd(int i){if(i<0||i>=FS_MAX_NODES||nodes[i].type!=FS_TYPE_DIR)return 0;cwd_idx=i;return 1;}
+int fs_cwd(void){return cwd_idx;}
 static size_t path_length(int i){
     size_t n=0;int depth=0;
     while(i>0&&i<FS_MAX_NODES&&depth++<FS_MAX_NODES){n+=1+slen(nodes[i].name);i=nodes[i].parent_idx;}

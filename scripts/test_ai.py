@@ -60,8 +60,14 @@ try:
         g.until('IA END');assert b'ERROR IA:' in g.buffer
         Handler.mode='http-error';g.send('ia http-error',['IA REQUEST'])
         g.until('IA END');assert b'HTTPError' in g.buffer
-        Handler.mode='delay';g.send('ia cancelar',['IA REQUEST'])
-        g.send('ia cancel',['IA CANCELADA']);g.send('suma 7 8',['= 15'])
+        # Cancelar con la orden aun en vuelo: `send` esperaria el prompt y la
+        # peticion ya habria terminado, asi que se escribe directo por COM1.
+        Handler.mode='delay';g.buffer.clear()
+        g.q.stdin.write(b'ia cancelar\n');g.q.stdin.flush()
+        g.until('IA REQUEST')
+        g.q.stdin.write(b'ia cancel\n');g.q.stdin.flush()
+        g.until('IA CANCELADA',5)
+        g.send('suma 7 8',['= 15'])
         time.sleep(.8)
         Handler.mode='ok';g.send('ia status',['IA REQUEST']);g.until('IA END')
         bridge.terminate();bridge.wait(timeout=3);bridge=None

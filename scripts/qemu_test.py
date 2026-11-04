@@ -1,13 +1,14 @@
 """Bounded QEMU serial test harness. Every instance terminates its child."""
 import os, select, subprocess, time
 from pathlib import Path
+import qemu_config
 class Guest:
     def __init__(self, name, extra=(), machine='q35'):
         self.name=name; self.buffer=bytearray(); self.transcript=bytearray()
-        self.q=subprocess.Popen(['qemu-system-x86_64','-machine',machine,'-accel','tcg',
-            '-vga','std','-m','256M','-smp','2','-cdrom','build/toolchain-os.iso',
-            '-boot','d','-nic','none','-display','none','-serial','stdio',
-            '-monitor','none','-no-reboot','-no-shutdown',*extra],
+        command=(qemu_config.base(machine=machine, iso='build/toolchain-os.iso')
+            + ['-nic','none'] + qemu_config.display('none') + qemu_config.serial_stdio()
+            + list(extra))
+        self.q=subprocess.Popen(command,
             stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     def until(self, marker='OS> ', timeout=35, start=0):
         end=time.monotonic()+timeout; needle=marker.encode()

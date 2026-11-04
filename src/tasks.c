@@ -118,6 +118,16 @@ void tasks_poll(void){
         else if(p->live)p->state=ready?TS_READY:(waiting?TS_WAITING:TS_RUNNING);
     }
 }
+/* Resumen de estados para la ventana Sistema y para SCHED. */
+tasks_info_t tasks_info(void){
+    tasks_info_t info={0,0,0};
+    for(unsigned i=0;i<SLOTS;i++){
+        if(pcbs[i].pid)info.processes++;
+        if(tcbs[i].tid&&tcbs[i].state!=TS_TERMINATED)info.threads++;
+    }
+    info.dispatches=dispatches;
+    return info;
+}
 void process_list(void){
     console_write("PROCESSES KERNEL SHARED_ADDRESS_SPACE NO_USER_ISOLATION\n");
     for(unsigned i=0;i<SLOTS;i++)if(pcbs[i].pid){

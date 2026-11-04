@@ -205,15 +205,19 @@ static int tokenize(const char *src) {
             continue;
         }
 
-        /* Numeros */
+        /* Numeros: se acumula en unsigned y se satura, nunca con signo. */
         if (is_digit(*p)) {
-            int64_t val = 0;
+            uint64_t val = 0;
+            int overflow = 0;
             while (is_digit(*p)) {
-                val = val * 10 + (*p - '0');
+                unsigned digit = (unsigned)(*p - '0');
+                if (val > (UINT64_MAX - digit) / 10) { overflow = 1; break; }
+                val = val * 10 + digit;
                 p++;
             }
+            while (is_digit(*p)) p++;
             t->type = TOK_NUM;
-            t->num = val;
+            t->num = overflow ? INT64_MAX : (int64_t)val;
             token_count++;
             continue;
         }
@@ -402,6 +406,9 @@ static int64_t eval_primary(void) {
             frame_count++;
             int saved_tok = cur_tok;
             cur_tok = funcs[f_idx].body_token;
+            /* Cada invocacion arranca en 0: una funcion sin return no debe
+             * heredar el valor devuelto por la llamada anterior. */
+            last_return_val = 0;
             exec_block();
             int64_t ret = last_return_val;
             if (exec_status == EXEC_RETURN) exec_status = EXEC_OK;
@@ -437,7 +444,11 @@ static int64_t eval_primary(void) {
 
 static int64_t eval_unary(void) {
     if (match(TOK_PLUS)) return eval_unary();
-    if (match(TOK_MINUS)) return -eval_unary();
+    if (match(TOK_MINUS)) {
+        int64_t value = eval_unary();
+        /* -INT64_MIN no es representable: se satura en lugar de desbordar. */
+        return value == INT64_MIN ? INT64_MIN : -value;
+    }
     if (match(TOK_NOT)) return !eval_unary();
     if (match(TOK_INC)) {
         if (peek(TOK_IDENT)) {
@@ -841,6 +852,10 @@ static int collect_functions(void) {
                 cur_tok++;
 
                 if (match(TOK_LPAREN)) {
+                    if (func_count >= MAX_FUNCS) {
+                        set_error(tokens[cur_tok].line, "DEMASIADAS FUNCIONES");
+                        return 0;
+                    }
                     func_t *fn = &funcs[func_count];
                     str_copy(fn->name, fname, sizeof(fn->name));
                     fn->param_count = 0;
@@ -889,7 +904,14 @@ int cpp_run_script(const char *source, int64_t *return_val) {
         return 0;
     }
 
-    collect_functions();
+    if (!collect_functions()) {
+        console_write("ERROR C++ EN LINEA ");
+        console_dec((uint64_t)error_line);
+        console_write(": ");
+        console_write(error_msg);
+        console_putc('\n');
+        return 0;
+    }
 
     /* Buscar main() */
     int main_idx = -1;

@@ -15,15 +15,16 @@ void editor_open(const char *p){
     console_write(buffer);if(slen(buffer)&&buffer[slen(buffer)-1]!='\n')console_putc('\n');
 }
 void editor_line(const char *s){
-    if(same(s,":q")){active=0;console_write("EDICION CANCELADA.\n");return;}
-    if(same(s,":wq")){
+    /* Misma semantica que la shell: los comandos no distinguen mayusculas. */
+    if(ci_same(s,":q")){active=0;console_write("EDICION CANCELADA.\n");return;}
+    if(ci_same(s,":wq")){
         char e[96];
         if(fs_write_path(path,buffer,e,sizeof(e))){active=0;console_write("ARCHIVO GUARDADO CON EXITO EN RAM (DISCO: VER PERSISTENCIA/FSSTATUS).\n");}
         else {console_write("ERROR: ");console_write(e);console_putc('\n');}
         return;
     }
-    if(same(s,":clear")){buffer[0]=0;return;}
-    if(same(s,":show")){console_write(buffer);console_putc('\n');return;}
+    if(ci_same(s,":clear")){buffer[0]=0;return;}
+    if(ci_same(s,":show")){console_write(buffer);console_putc('\n');return;}
     if((s[0]==':'&&s[1]=='l'&&s[2]=='i'&&s[3]=='n'&&s[4]=='e'&&s[5]==' ')||
        (s[0]==':'&&s[1]=='d'&&s[2]=='e'&&s[3]=='l'&&s[4]==' ')){
         int del=s[1]=='d';s+=del?5:6;uint64_t line=0;int digits=0;
