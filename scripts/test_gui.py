@@ -4,7 +4,9 @@
 Arranca QEMU sin ventana, escribe en la shell por QMP y comprueba los
 marcadores que el kernel emite por COM1. Valida el arranque de la GUI, el
 driver de red, el raton PS/2 (movimiento real por IRQ12), la lista de
-aplicaciones ELF y la carga de las apps.
+aplicaciones ELF y la carga de las apps. Con dos ventanas abiertas comprueba
+ademas la ventana activa: el clic en el dock la cambia y las teclas dejan de
+llegar a la ventana que la perdio.
 
 Uso: python3 scripts/test_gui.py
 """
@@ -103,6 +105,27 @@ def wait_for(serial, needle, timeout, description):
     raise SystemExit(1)
 
 
+def click_at(client, x, y):
+    """Clic en coordenadas absolutas: el puntero parte del centro al abrir la
+    GUI, se lleva a la esquina superior izquierda con margen de sobra (20
+    pasos de 100 px superan cualquier perfil) y desde ahi se avanza."""
+    for _ in range(20):
+        client.move(-100, -100)
+    while x > 0 or y > 0:
+        dx, dy = min(40, x), min(30, y)
+        client.move(dx, dy)
+        x -= dx
+        y -= dy
+    client.button(True)
+    client.button(False)
+    time.sleep(0.6)
+
+
+def new_serial_text(serial, before):
+    """Lo que se ha escrito por serie despues de leer 'before'."""
+    return serial.read_text(errors='replace')[len(before):]
+
+
 def main():
     if not ISO.exists():
         print('Falta %s: ejecuta make iso.' % ISO)
@@ -119,6 +142,8 @@ def main():
             wait_for(serial_path, 'KERNEL_READY', 40, 'arranque del kernel')
             client = QMP(socket_path)
             wait_for(serial_path, 'OS> ', 10, 'prompt de la shell')
+            wait_for(serial_path, 'FS: ARCHIVOS DEL SISTEMA EN SOLO LECTURA', 10,
+                     'archivos internos del sistema en solo lectura')
 
             client.ascii('red\n')
             wait_for(serial_path, 'RED: RTL8139', 10, 'driver de red RTL8139')
@@ -159,6 +184,8 @@ def main():
                 if 'GUI_READY RES=' in line:
                     resolution = line.split('GUI_READY RES=', 1)[1].strip()
             print('OK  resolucion entregada por Limine: %s' % resolution)
+            wait_for(serial_path, 'GUI: FONDO IMAGEN', 15,
+                     'fondo del escritorio con la imagen empaquetada')
             wait_for(serial_path, 'SESION FINALIZADA', 15, 'consola restaurada tras la GUI')
 
             # Sesion interactiva: mover el puntero y pulsar el boton izquierdo
@@ -173,6 +200,26 @@ def main():
             client.button(True)
             client.button(False)
             client.move(-90, -60)
+            width, height = (int(value) for value in resolution.lower().split('x'))
+            click_at(client, width * 57 // 100, height * 94 // 100)
+            wait_for(serial_path, 'GUI: VISOR IMAGENES', 10,
+                     'visor de imagenes abierto desde el dock')
+            wait_for(serial_path, 'GUI: VENTANA ACTIVA Imagenes', 10,
+                     'la ventana abierta pasa a ser la activa')
+
+            # Con dos ventanas abiertas el teclado solo trabaja en la activa:
+            # se abre Red desde el dock y las flechas ya no cambian la imagen.
+            click_at(client, width * 43 // 100, height * 94 // 100)
+            wait_for(serial_path, 'GUI: VENTANA ACTIVA Red', 10,
+                     'el clic en Red le da la ventana activa')
+            before = serial_path.read_text(errors='replace')
+            client.key('down')
+            time.sleep(0.5)
+            if 'GUI: IMAGEN ' in new_serial_text(serial_path, before):
+                print('FALLO: la flecha movio la imagen de la ventana inactiva')
+                return 1
+            print('OK  la flecha no afecta a la ventana inactiva')
+
             client.key('esc')
             wait_for(serial_path, 'SESION FINALIZADA', 15, 'salida del escritorio con ESC')
             print('OK  latencia de la sesion grafica: %.2f s' % (time.monotonic() - start))
@@ -190,8 +237,23 @@ def main():
 
             client.ascii('gui run 0\n')
             wait_for(serial_path, 'ELF: EJECUTANDO editor.elf', 20, 'carga del editor ELF')
-            client.ascii('hola mundo')
+            wait_for(serial_path, 'editor.elf: PLANTILLA NUEVA', 20,
+                     'el editor arranca con una plantilla en blanco')
+            client.ascii('contenido del editor')
+            # TAB abre el selector interno; otro TAB lo pasa a modo guardar.
+            client.key('tab')
+            wait_for(serial_path, 'editor.elf: SELECTOR ABRIR', 15,
+                     'selector para elegir el archivo que abrir')
+            client.key('tab')
+            wait_for(serial_path, 'editor.elf: SELECTOR GUARDAR', 15,
+                     'selector en modo guardar')
+            client.ascii('demo2.txt')
+            client.key('ret')
+            wait_for(serial_path, 'editor.elf: GUARDADO /demo2.txt', 15,
+                     'el editor guarda con la ruta elegida')
             client.key('esc')
+            wait_for(serial_path, 'GUI: VENTANA CERRADA Editor de texto LIMPIA', 20,
+                     'el cierre del editor limpia su area del escritorio')
             wait_for(serial_path, 'ELF: FIN editor.elf CODIGO=0', 20, 'retorno del editor ELF')
 
             client.ascii('gui run 1\n')
@@ -205,8 +267,33 @@ def main():
             client.ascii('open demo.txt\n')
             wait_for(serial_path, 'fsok', 20,
                      'contenido leido desde la terminal grafica')
+            client.ascii('open demo2.txt\n')
+            wait_for(serial_path, 'contenido del editor', 20,
+                     'archivo guardado desde el editor se lee en la terminal')
             client.key('esc')
             wait_for(serial_path, 'ELF: FIN terminal.elf CODIGO=0', 20, 'retorno de la terminal ELF')
+
+            # GUI EDIT: el escritorio lanza el editor con el archivo indicado
+            # mediante el handoff launch_file del ABI v4.
+            client.ascii('gui edit demo2.txt\n')
+            wait_for(serial_path, 'editor.elf: ABIERTO /demo2.txt', 20,
+                     'el editor recibe la ruta de lanzamiento')
+            client.key('esc')
+            wait_for(serial_path, 'ELF: FIN editor.elf CODIGO=0', 20,
+                     'retorno del editor lanzado con GUI EDIT')
+
+            # Los archivos internos se pueden leer, pero el editor los abre en
+            # modo de solo lectura y descarta cualquier cambio. Se entra en
+            # /etc con CD porque la tecla "/" del mapa ES-LATAM exige shift.
+            client.ascii('cd etc\n')
+            client.ascii('gui edit motd\n')
+            wait_for(serial_path, 'editor.elf: SOLO LECTURA /etc/motd', 20,
+                     'el editor abre un archivo del sistema en solo lectura')
+            client.ascii('x')
+            client.key('esc')
+            wait_for(serial_path, 'ELF: FIN editor.elf CODIGO=0', 20,
+                     'retorno del editor con un archivo del sistema')
+            client.ascii('cd ..\n')
 
             client.ascii('help\n')
             wait_for(serial_path, 'INTERFAZ GRAFICA, RED Y APLICACIONES', 10, 'ayuda ampliada')

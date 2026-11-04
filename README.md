@@ -24,10 +24,11 @@ Arranca en BIOS y UEFI desde una ISO híbrida y se ejecuta en QEMU.
 | **Guardar archivos entre reinicios** | FS en RAM de 64 nodos con snapshots ATA alternados, generación y recuperación ante corrupción |
 | **Ejecutar tareas concurrentes** | 16 PCB/TCB, pilas de 16 KiB con canario y Round Robin cooperativo con contexto en NASM |
 | **Hablar UTF-8 de verdad** | Validación estricta, teclado ES-LATAM/US con teclas muertas y glifos españoles en framebuffer |
-| **Trabajar en un escritorio** | GUI de tema claro a 1920x1080 (por defecto, con `make run FULLSCREEN=1` para pantalla completa) o 1280x800, con ventanas, dock, arrastre, repintado por zonas, puntero PS/2 sin retardo y reloj local en la barra |
-| **Consultar el sistema y los archivos** | Ventana Sistema con CPU, núcleos, RAM, heap, tareas, red, ratón y uptime; ventana Archivos con navegación, apertura, creación, borrado y renombrado |
+| **Trabajar en un escritorio** | GUI de tema claro a 1280x720 (por defecto, con la ventana de QEMU a escala 1:1) o a 1920x1080/1280x800 con `RES`, con ventanas, dock, arrastre, repintado por zonas, puntero PS/2 sin retardo y reloj local en la barra. La ventana activa lleva el título y el marco en azul y es la única que recibe el teclado |
+| **Consultar el sistema y los archivos** | Ventana Sistema con CPU, núcleos, RAM, heap, tareas, red, ratón y uptime; ventana Archivos con navegación, apertura, creación, borrado y renombrado, y los archivos internos del sistema (`/etc`, `/boot`, `/proc`, `/wallpapers`) visibles pero bloqueados en solo lectura |
+| **Poner tu propio fondo y ver imágenes** | El escritorio usa `images/wallpaper.jpg` como fondo (recortado y escalado en el build); la ventana Imágenes muestra la vista previa de todas las imágenes empaquetadas |
 | **Conectar la máquina a la red** | Driver PCI RTL8139 con MAC, ARP, ping ICMP y DNS por UDP sobre la red de usuario de QEMU (IP fija 10.0.2.15/24) |
-| **Cargar programas propios** | Cargador ELF64 de PIE estáticos con `host_api_t` v3 (editor y terminal incluidos en `apps/`) |
+| **Cargar programas propios** | Cargador ELF64 de PIE estáticos con `host_api_t` v5 (editor y terminal incluidos en `apps/`), con `is_system` para respetar los archivos internos |
 | **Conversar con una IA local** | Protocolo binario TC/1 por COM2 hacia Ollama, probado extremo a extremo con UTF-8 |
 
 > **Estado:** 19 de 19 grupos automatizados PASSED, 0 FAILED, 0 BLOCKED, 0 SKIPPED.
@@ -40,7 +41,7 @@ Arranca en BIOS y UEFI desde una ISO híbrida y se ejecuta en QEMU.
 | Arquitectura | x86-64, higher-half `0xffffffff80000000` |
 | Arranque | Limine 8.x (BIOS y UEFI), ISO híbrida |
 | Emulador de referencia | QEMU `qemu-system-x86_64`, máquina `q35`, 256 MiB, 2 vCPU, KVM automático (TCG si no hay `/dev/kvm`) |
-| Tamaño del kernel | ~818 KiB ELF (`build/kernel.elf`), sin secciones RWX |
+| Tamaño del kernel | ~5.4 MiB ELF (`build/kernel.elf`), con las imágenes del escritorio en `.rodata` y sin secciones RWX |
 | Estado de validación | **19 de 19 grupos automatizados PASSED**, 0 FAILED/BLOCKED/SKIPPED |
 | Licencia | MIT (`LICENSE`) |
 
@@ -70,6 +71,9 @@ Opcionales:
 
 - `ovmf` para el arranque UEFI (`make uefi`).
 - `gdb` para depuración con `make debug`.
+- Pillow (`python3-pillow`) para convertir `images/*.jpg` y `*.png` al fondo del
+  escritorio y al visor de imágenes (`make images`). Sin Pillow, el build falla al
+  generar el blob; `make images-check` lo detecta antes.
 - [Ollama](https://ollama.com) en el anfitrión para las pruebas de IA real
   (`make test-ai-real`, `make test-ai-utf8`).
 
@@ -99,7 +103,8 @@ Objetivos disponibles:
 ```bash
 make            # build/kernel.elf
 make iso        # build/toolchain-os.iso (ISO híbrida BIOS+UEFI)
-make iso RES=1280x800  # perfil compacto (por defecto 1920x1080)
+make iso RES=1920x1080 # perfil HD (por defecto 1280x720)
+make iso RES=1280x800  # perfil compacto
 make run FULLSCREEN=1 # ventana a pantalla completa
 make run        # arranca en QEMU con salida serie en la terminal
 make headless   # igual, sin ventana gráfica
@@ -118,6 +123,8 @@ Objetivos auxiliares:
 |---|---|
 | `make check` | Valida el ELF con `scripts/check_elf.py` (entrada, secciones, W^X) |
 | `make inspect` | Genera `build/elf.txt`, `disassembly.txt`, `symbols.txt` y `kernel.map` |
+| `make images` | Regenera `build/assets/images.bin` desde `images/` (fondo y visor) |
+| `make images-check` | Comprueba Pillow y que haya imágenes antes de compilar |
 | `make debug` | QEMU con GDB escuchando **solo** en `127.0.0.1:1234` |
 | `make trace` | Registro de interrupciones en `build/interrupts.log` |
 | `make uefi` | Arranque UEFI con OVMF (`OVMF_CODE`/`OVMF_VARS` configurables) |
@@ -170,6 +177,21 @@ misma lista desde el kernel.
 Dentro de `EDIT>`: `:show`, `:clear`, `:line N texto`, `:del N`, `:wq` (guardar) y
 `:q` (descartar). Cualquier otra línea se añade como texto y `BACKSPACE` corrige.
 
+El árbol incluye archivos internos que el sistema vuelve a sembrar en cada arranque:
+
+| Ruta | Contenido |
+|---|---|
+| `/etc/motd`, `/etc/os-release`, `/etc/hostname`, `/etc/fstab` | Mensaje del día, identidad del sistema y tabla de montajes didáctica |
+| `/boot/limine.conf` | Configuración del cargador con la resolución solicitada |
+| `/proc/version`, `/proc/cpuinfo` | Versión del kernel y rasgos de la CPU detectados |
+| `/wallpapers/wallpaper.jpg` | Imagen que el escritorio usa como fondo (la genera `make images`) |
+
+Estos nodos se pueden leer (`LS /etc`, `OPEN /etc/motd`, `GUI EDIT /etc/motd`), pero
+`RM`, `REN`, `COPY` y la escritura desde las apps los rechazan con
+`ARCHIVO DEL SISTEMA: SOLO LECTURA`; el editor y la ventana Archivos los marcan y
+deshabilitan los botones de borrado y renombrado. Copia su contenido a otro archivo
+si necesitas modificarlo.
+
 ### Memoria, interrupciones y tareas
 
 | Comando | Descripción |
@@ -184,9 +206,10 @@ Dentro de `EDIT>`: `:show`, `:clear`, `:line N texto`, `:del N`, `:wq` (guardar)
 
 | Comando | Descripción |
 |---|---|
-| `GUI` | Abre el escritorio interactivo; `ESC` vuelve a la consola |
+| `GUI` | Abre el escritorio interactivo; `ESC` vuelve a la consola salvo que la ventana activa use esa tecla |
 | `GUI DEMO` | Dibuja un fotograma y restaura la consola (prueba rápida) |
 | `GUI RUN <índice>` | Lanza directamente un módulo ELF desde el escritorio |
+| `GUI EDIT <archivo>` | Abre el editor gráfico con ese archivo ya cargado |
 | `RED`, `RED ARP` | Estado del RTL8139 (MAC, IP, puerta, DNS, enlace, contadores) y sondeo ARP |
 | `RED PING <ip>` | Eco ICMP con tiempo de ida y vuelta (`RED PING 10.0.2.2`) |
 | `RED DNS <nombre>` | Resuelve un nombre contra el DNS de QEMU (`RED DNS example.com`) |
@@ -195,11 +218,46 @@ Dentro de `EDIT>`: `:show`, `:clear`, `:line N texto`, `:del N`, `:wq` (guardar)
 | `HORA` | Hora local del anfitrión desde el CMOS (también en la barra superior) |
 | `ELF`, `ELF RUN <índice>` | Lista los módulos Limine y ejecuta uno |
 
-Las apps reciben `host_api_t` en `RDI` (ABI 3): ventana propia, primitivas con el
+Las apps reciben `host_api_t` en `RDI` (ABI 5): ventana propia, primitivas con el
 tema del sistema, eventos relativos a su lienzo, sistema de archivos del kernel
 (`read_file`, `write_file`, `make_dir`, `remove_node`, `rename_node`, `nodes`,
-`cwd`/`chdir`) y `exec` para lanzar órdenes del shell capturando la salida. `ESC`
-o el botón de cerrar las devuelve al escritorio. Se compilan con `make apps`.
+`cwd`/`chdir`, `is_system`), `exec` para lanzar órdenes del shell capturando la
+salida y `launch_file` con la ruta con la que el escritorio lanzó la app
+(`Archivos > Editar` o `GUI EDIT`). `ESC` o el botón de cerrar las devuelve al
+escritorio, que recupera el área ocupada sin dejar restos. Se compilan con
+`make apps`.
+
+El editor arranca con una plantilla en blanco sin nombre; los botones **Abrir**
+y **Guardar** de su barra abren un selector con el árbol del sistema de archivos
+(directorio actual, `..` y lista de hijos) para elegir qué leer y en qué carpeta
+dejar el texto. Los archivos internos aparecen marcados como `sistema`: se abren
+con `[solo lectura]` en la barra y ninguna tecla de edición los modifica. El área
+de texto y la pantalla de la terminal ajustan el texto al ancho real de la
+ventana y añaden una barra de desplazamiento vertical que aparece cuando el
+contenido no cabe; el pulgar se puede pulsar y arrastrar con el ratón.
+
+La terminal ajusta por palabras y, si una palabra sola no cabe, recorta la línea
+por caracteres UTF-8 completos: la ruta, cada renglón y el pie de ayuda terminan
+dentro del recuadro y nunca se pintan bajo la barra de desplazamiento. La salida
+de una orden se guarda entera (4 KiB, así que `HELP` ya no queda a medias) y el
+eco `OS> orden` empieza siempre en línea nueva, de modo que dos salidas seguidas
+no se pegan.
+
+Solo hay una ventana de aplicación a la vez. Tanto ella como las del dock
+atienden el teclado únicamente cuando son la **ventana activa**: se cambia con
+un clic en la ventana o en su botón del dock, la recién abierta queda activa, al
+cerrarla el foco pasa a la que esté más arriba y la activa se distingue por el
+título y un marco azul que sigue las esquinas redondeadas de la ventana. Las
+teclas nunca llegan a una ventana inactiva, y `ESC` cierra el escritorio solo si
+la ventana activa no lo consume (por ejemplo, el visor de contenido de Archivos).
+
+El escritorio toma `images/wallpaper.jpg` como fondo. `scripts/build_images.py`
+recorta la imagen al aspecto del modo de vídeo, la reduce a `RES` y la convierte a
+RGB565, y `objcopy` la enlaza en `.rodata.images`; no hay decodificador JPEG/PNG en
+el kernel. La ventana **Imágenes** del dock lista todo lo empaquetado con su tamaño
+y una vista previa escalada, y `Archivos > abrir` sobre un `.jpg`, `.jpeg` o `.png`
+lleva directamente a esa imagen. Para cambiar el fondo basta con reemplazar
+`images/wallpaper.jpg` y recompilar; sin imágenes, el escritorio vuelve al degradado.
 
 ### Disco, persistencia e IA
 
@@ -243,7 +301,8 @@ esa salida como tipo 5. La sesión termina por pasos, por `0x85` o por timeout.
 | Tareas | `src/tasks.c`, `src/context.asm` | 16 PCB/TCB, pilas de 4 páginas con canario, cambio de contexto |
 | Interrupciones | `src/interrupts.c`, `interrupt_stubs.asm` | IDT, excepciones con volcado de registros, PIT a 100 Hz |
 | Consola | `src/console.c`, `include/font.h` | COM1 más framebuffer RGB con rejilla de caracteres y suspensión al abrir la GUI |
-| Escritorio | `src/gui.c`, `src/font_ui.c`, `include/gui.h` | Doble buffer en PMM, tema claro, ventanas, dock, iconos, reloj y cursor |
+| Escritorio | `src/gui.c`, `src/font_ui.c`, `include/gui.h` | Doble buffer en PMM, tema claro, ventanas con foco de teclado, dock, iconos, reloj, cursor y fondo por imagen |
+| Imágenes | `src/images.c`, `include/images.h`, `scripts/build_images.py` | Blob RGB565 `.rodata.images`, fondo escalado con tablas y visor con vista previa |
 | Ratón | `src/mouse.c`, `include/mouse.h` | i8042 + IRQ12, paquetes de 3 bytes y sondeo de respaldo |
 | Red | `src/net.c`, `include/net.h` | PCI 0xCF8/0xCFC, RTL8139, Ethernet, ARP, IPv4 con ICMP y DNS por UDP |
 | Reloj | `src/rtc.c`, `include/rtc.h` | Hora local del CMOS (BCD/binario, 12/24 h) para la barra y `HORA` |
@@ -285,6 +344,7 @@ INICIAR_DEMO_LINUX.sh  INICIAR_DEMO_WINDOWS.bat
 src/            kernel y subsistemas en C11 y NASM
 apps/           aplicaciones ELF64 (editor.c, terminal.c)
 include/        cabeceras del kernel y host_api.h
+images/         JPEG/PNG de origen (wallpaper.jpg es el fondo por defecto)
 scripts/        pruebas, empaquetado y validación (Python 3)
 docs/           INDICE.md con el orden de lectura
   diseno/       arquitectura, decisiones y fases
@@ -325,7 +385,7 @@ Pruebas que arrancan QEMU:
 | `make test-keyboard` | Teclado español/US y texto UTF-8 |
 | `make test-utf8-persistence` | UTF-8 persistido entre arranques |
 | `make test-scheduler` | Round Robin y recuperación de tareas |
-| `make test-gui` | GUI, reloj del CMOS, repintado por zonas, ratón por IRQ12, RTL8139 con ICMP/DNS, ventanas Sistema/Archivos y apps editor/terminal |
+| `make test-gui` | GUI, fondo por imagen, visor de imágenes, reloj del CMOS, repintado por zonas, ratón por IRQ12, RTL8139 con ICMP/DNS, ventanas Sistema/Archivos, archivos internos de solo lectura, apps editor/terminal, ventana activa y aislamiento del teclado entre ventanas |
 | `make test-uefi` | Arranque UEFI con OVMF |
 | `make test-ai-bridge` | Transporte TC/1 contra un mock |
 | `make test-agent` | Agente de bajo nivel: sesión TC/1, lista blanca y rechazo de `halt` |
@@ -348,7 +408,7 @@ python3 scripts/package_etapas56.py       # ZIP de entrega y verificación de pr
 
 - El planificador es **cooperativo**: una tarea no se expropia por temporizador.
 - La GUI se dibuja por software, sin SSE ni aceleración; el modo de vídeo se elige
-  en el build (`make iso RES=1280x800` para el perfil compacto) y no cambia en
+  en el build (`make iso RES=1920x1080` para el perfil HD) y no cambia en
   caliente. El escritorio repinta solo las zonas marcadas como sucias y espera
   con `hlt` cuando no hay eventos, de modo que un anfitrión sin KVM sigue siendo
   usable.
@@ -359,9 +419,16 @@ python3 scripts/package_etapas56.py       # ZIP de entrega y verificación de pr
   no por IRQ. Sin TCP no se puede abrir una página web ni ejecutar clientes que
   dependan de sockets.
 - Las apps ELF corren en **ring 0** sin aislamiento; el `host_api_t` es la frontera
-  y `elf_abort()` recupera el control si la app provoca una excepción.
+  y `elf_abort()` recupera el control si la app provoca una excepción. La ejecución
+  es bloqueante, así que el escritorio mantiene una sola ventana de app a la vez.
 - El sistema de archivos vive en RAM (64 nodos) y se guarda como snapshot completo; no
   hay journaling ni bloques libres reutilizables entre snapshots.
+- Los archivos internos (`/etc`, `/boot`, `/proc`, `/wallpapers`) se vuelven a sembrar
+  en cada arranque y en cada lectura de disco: son de solo lectura y su contenido no
+  se persiste.
+- Las imágenes se convierten en el anfitrión: el kernel no decodifica JPEG ni PNG,
+  admite hasta 8 (`IMAGES_MAX`) y cada fondo de 1280x720 ocupa ~1.8 MiB en
+  `.rodata.images`, que forma parte del kernel.
 - `cpp_runner` implementa un subconjunto de C: sin punteros, `struct`, `switch` ni
   librerías, y con un tope de 500 000 pasos por ejecución.
 - ATA es PIO LBA28 con un único dispositivo maestro; no hay DMA ni IRQ14.

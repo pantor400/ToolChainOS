@@ -108,6 +108,20 @@ static int api_exec(const char *line, char *out, int capacity) {
 }
 static int api_key(void) { return keyboard_special(); }
 
+/* --- v4: ruta de lanzamiento ------------------------------------------- */
+
+/* La app recibe una copia porque la llamada consume el handoff del escritorio. */
+static const char *api_launch_file(void) {
+    static char copy[FS_PATH_MAX];
+    copystr(copy, gui_launch_file(), sizeof(copy));
+    gui_launch_file_clear();
+    return copy;
+}
+
+/* --- v5: archivos internos del sistema --------------------------------- */
+
+static int api_is_system(const char *path) { return path ? fs_is_system_path(path) : 0; }
+
 static const host_api_t host = {
     .abi_version = HOST_ABI_VERSION,
     .size = sizeof(host_api_t),
@@ -120,6 +134,8 @@ static const host_api_t host = {
     .nodes = api_nodes, .node_count = api_node_count,
     .cwd = api_cwd, .chdir = api_chdir, .cwd_path = api_cwd_path,
     .exec = api_exec, .key = api_key,
+    .launch_file = api_launch_file,
+    .is_system = api_is_system,
 };
 
 /* --- Servicios del cargador -------------------------------------------- */
@@ -150,6 +166,13 @@ const char *elf_name(unsigned index) {
 size_t elf_size(unsigned index) {
     if (index >= elf_count()) return 0;
     return (size_t)module_list->modules[index]->size;
+}
+
+int elf_find(const char *name) {
+    if (!name) return -1;
+    for (unsigned i = 0; i < elf_count(); i++)
+        if (ci_same(elf_name(i), name)) return (int)i;
+    return -1;
 }
 
 int elf_busy(void) { return busy; }

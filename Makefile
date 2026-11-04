@@ -4,6 +4,7 @@ CROSS ?=
 CC := $(CROSS)gcc
 LD := $(CROSS)ld
 OBJDUMP := $(CROSS)objdump
+OBJCOPY := $(CROSS)objcopy
 READELF := $(CROSS)readelf
 NM := $(CROSS)nm
 NASM := nasm
@@ -13,19 +14,25 @@ HOST_CC := cc
 SAN ?= address,undefined
 SANFLAGS := $(if $(strip $(SAN)),-fsanitize=$(SAN))
 QEMU ?= qemu-system-x86_64
-# Resolucion solicitada a Limine. 1920x1080 llena una pantalla Full HD; el perfil
-# compacto sigue disponible con `make run RES=1280x800`.
-RES ?= 1920x1080
-# Ventana del emulador ajustada a la pantalla del anfitrion (no recorta el modo).
-# Con -display none o SDL: make run DISPLAY_QEMU=none
-DISPLAY_QEMU ?= gtk,zoom-to-fit=on
+# Resolucion solicitada a Limine. 1280x720 cabe en cualquier pantalla con la
+# ventana del emulador a escala 1:1; los perfiles 1920x1080 y 1280x800 siguen
+# disponibles con `make run RES=1920x1080` y `make run RES=1280x800`.
+RES ?= 1280x720
+# Ventana del emulador del tamano exacto del modo del huesped: sin zoom, QEMU
+# abre 1280x720 pixeles reales y no reescala. Para llenar la pantalla del
+# anfitrion: make run DISPLAY_QEMU=gtk,zoom-to-fit=on
+DISPLAY_QEMU ?= gtk,zoom-to-fit=off
 # Pantalla completa: make run FULLSCREEN=1 (util cuando el guest es 1920x1080).
 FULLSCREEN ?= 0
 BUILD := build
 KERNEL := $(BUILD)/kernel.elf
 ISO := $(BUILD)/toolchain-os.iso
 CSRC := $(wildcard src/*.c)
-OBJ := $(patsubst src/%.c,$(BUILD)/%.o,$(CSRC)) $(BUILD)/cpu.o $(BUILD)/interrupt_stubs.o $(BUILD)/context.o $(BUILD)/elf_enter.o
+# Imagenes del escritorio: el anfitrion convierte images/*.jpg y *.png a un
+# blob RGB565 y objcopy lo enlaza como datos de solo lectura del kernel.
+IMAGES_BIN := $(BUILD)/assets/images.bin
+IMAGES_OBJ := $(BUILD)/images_blob.o
+OBJ := $(patsubst src/%.c,$(BUILD)/%.o,$(CSRC)) $(BUILD)/cpu.o $(BUILD)/interrupt_stubs.o $(BUILD)/context.o $(BUILD)/elf_enter.o $(IMAGES_OBJ)
 APPS := $(patsubst apps/%.c,$(BUILD)/apps/%.elf,$(wildcard apps/*.c))
 CFLAGS := -std=c11 -O2 -g -Wall -Wextra -Werror -ffreestanding -fno-builtin \
  -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -mcmodel=kernel \
@@ -44,7 +51,7 @@ QFLAGS := -machine q35 -accel $(ACCEL) -cpu $(CPU) -m 256M -smp 2 \
  -rtc base=localtime,clock=host \
  -netdev user,id=net0 -device rtl8139,netdev=net0 \
  $(if $(filter 1,$(FULLSCREEN)),-full-screen)
-.PHONY: all iso run headless debug trace inspect check clean uefi apps fonts
+.PHONY: all iso run headless debug trace inspect check clean uefi apps fonts images images-check
 all: $(KERNEL)
 iso: $(ISO)
 $(BUILD):
@@ -55,6 +62,15 @@ $(BUILD)/%.o: src/%.asm | $(BUILD)
 	$(NASM) -f elf64 -g -F dwarf $< -o $@
 $(BUILD)/cpu.o: src/cpu.asm | $(BUILD)
 	$(NASM) -f elf64 -g -F dwarf $< -o $@
+$(IMAGES_BIN): $(wildcard images/*) scripts/build_images.py | $(BUILD)
+	python3 scripts/build_images.py --size $(RES) --output $@
+# La seccion .rodata.images entra en el segmento de solo lectura de linker.ld.
+# objcopy deriva los simbolos de la ruta de entrada: se ejecuta desde $(BUILD)
+# con una ruta relativa para que no dependan de donde este el arbol de build.
+$(IMAGES_OBJ): $(IMAGES_BIN)
+	cd $(BUILD) && $(OBJCOPY) -I binary -O elf64-x86-64 -B i386:x86-64 \
+	 --rename-section .data=.rodata.images,alloc,load,readonly,data,contents \
+	 assets/images.bin images_blob.o
 $(KERNEL): $(OBJ) linker.ld
 	$(LD) $(LDFLAGS) -Map=$(BUILD)/kernel.map -o $@ $(OBJ) $(LIBGCC)
 $(BUILD)/limine: vendor/limine/limine.c vendor/limine/limine-bios-hdd.h | $(BUILD)
@@ -174,3 +190,9 @@ apps: $(APPS)
 # Regenera las tipografias horneadas (Pillow + fuente del sistema).
 fonts:
 	python3 scripts/build_fonts.py
+# Regenera el blob RGB565 de images/ que usan el fondo y el visor.
+images: $(IMAGES_BIN)
+	@echo "Imagenes: $(IMAGES_BIN)"
+# Comprueba que Pillow y images/ estan disponibles para el build.
+images-check:
+	python3 scripts/build_images.py --check

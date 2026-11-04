@@ -31,7 +31,7 @@ def main():
     else:command+=qemu_config.net()
     if a.headless:command+=qemu_config.display('none')
     else:
-        command+=qemu_config.display(os.environ.get('QEMU_DISPLAY','gtk,zoom-to-fit=on'))
+        command+=qemu_config.display(os.environ.get('QEMU_DISPLAY','gtk,zoom-to-fit=off'))
         if a.fullscreen or os.environ.get('QEMU_FULLSCREEN')=='1':command+=['-full-screen']
     if a.ata:command+=qemu_config.disk(image_path(a.disk))
     sock=ROOT/'build/ai.sock'

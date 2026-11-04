@@ -72,6 +72,9 @@ void keyboard_scancode(uint8_t scan){
         [30]='a',[31]='s',[32]='d',[33]='f',[34]='g',[35]='h',[36]='j',[37]='k',[38]='l',
         [44]='z',[45]='x',[46]='c',[47]='v',[48]='b',[49]='n',[50]='m'};
     if(scan==14){if(dead){dead=0;return;}emit('\b');return;}
+    /* TAB viaja como 9: la shell lo ignora y las apps lo usan para cambiar
+     * de campo o abrir su selector de archivos. */
+    if(scan==15){emit('\t');return;}
     /* ESC viaja como 27: la shell lo ignora y la GUI lo usa para salir. */
     if(scan==1){emit(27);return;}
     if(scan==28)c='\n';

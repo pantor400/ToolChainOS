@@ -79,7 +79,8 @@ Protocolo COM2 y puente intactos. Pruebas actuales: ../validacion/PRUEBAS_Y_RESU
 
 ## V3.2 — escritorio, red y apps ELF
 Interfaz grafica de tema claro con doble buffer RGB propio en 0x00RRGGBB, no en
-MMIO. Se asigna con el PMM: 1280x800 son 4,1 MB y 1920x1080 son 8,3 MB, fuera
+MMIO. Se asigna con el PMM: 1280x720 son 3,5 MB, 1280x800 son 4,1 MB y
+1920x1080 son 8,3 MB, fuera
 del tope del heap. La conversion al framebuffer respeta los shifts de mascara y
 tiene ruta rapida para 16/8/0. El cursor se pinta directo sobre el dispositivo
 tras el volcado: sin guardar fondo no hay estelas ni lecturas de MMIO.
@@ -87,9 +88,9 @@ Sin SSE/FPU (-mgeneral-regs-only) no se rasteriza TTF en caliente: las
 tipografias se hornean en el anfitrion con Pillow en 6 tamanos 4bpp
 (scripts/build_fonts.py) y el kernel elige juego por resolucion. Los iconos son
 procedurales sobre lienzo 24x24 escalado por enteros; no hay PNG ni decoder.
-La resolucion la fija Limine y se selecciona en build con RES=1920x1080 (perfil
-por defecto) o RES=1280x800 (compacto); no hay cambio en caliente del modo de
-video.
+La resolucion la fija Limine y se selecciona en build con RES=1280x720 (perfil
+por defecto), RES=1920x1080 (HD) o RES=1280x800 (compacto); no hay cambio en
+caliente del modo de video.
 Raton por i8042 + IRQ12 (0xA8, config byte, 0xF6, 0xF3 0x64, 0xE8 0x03, 0xF4),
 paquetes de 3 bytes resincronizados por el bit 3 y respaldo por sondeo. Sin
 driver Synaptics/Elan: el touchpad se anuncia como compatibilidad PS/2 relativa.
@@ -147,6 +148,15 @@ maximo verificable sin implementar una pila completa y sockets. `test_gui.py`
 comprueba ARP, el eco a 10.0.2.2 y el envio de la consulta DNS; la resolucion
 real depende de que el anfitrion tenga Internet.
 
+## 2026-11-03 — reparto 1280x720 y ventana a escala 1:1
+El perfil por defecto baja a 1280x720 para que el escritorio quepa comodo en
+cualquier monitor. `DISPLAY_QEMU` pasa a `gtk,zoom-to-fit=off`, de modo que la
+ventana del emulador mide exactamente el modo del huesped (1280x720) en vez de
+estirarse hasta llenar la pantalla del anfitrion; `DISPLAY_QEMU=gtk,zoom-to-fit=on`
+y `FULLSCREEN=1` siguen disponibles para las demostraciones. `limine.conf`
+versionado declara 1280x720x32 y `run_vm.py` usa el mismo valor por defecto. Los
+perfiles 1920x1080 y 1280x800 se conservan con `RES`.
+
 ## 2026-11-03 — reloj en la barra y fin de la app de dibujo
 La barra superior mostraba resolucion e IP, pero ningun reloj. Se anade
 `src/rtc.c`, que lee el CMOS tratando el bit de actualizacion en curso, el
@@ -159,3 +169,47 @@ Se retira `apps/pintar.c`: era una demo de trazo sin uso dentro del guion y su
 modulo ocupaba `limine.conf`. Quedan editor y terminal, que son las apps que
 usan el FS y `exec`; `test_gui.py` deja de lanzar `pintar.elf` y comprueba el
 reloj en su lugar.
+
+## 2026-11-03 — cierre de ventanas, barras de desplazamiento y selector del editor
+El boton de cerrar de una ventana del sistema ponia `used = 0` sin invalidar su
+rectangulo, asi que el escritorio conservaba el ultimo fotograma hasta que otra
+accion lo repintaba. Se centraliza en `close_window()`: dana el area de la
+ventana (con su sombra) y el dock, cancela el arrastre y deja el slot libre; la
+usan `toggle_window`, `gui_app_close` y `handle_press`. Como `GUI RUN` termina
+sin otro ciclo de eventos, `gui_app_close` repinta y vuelca en el acto. El
+repintado por regiones se mantiene: no se anade ningun repintado completo.
+`report_close_cleanup()` compara el pixel central del area cerrada con el
+gradiente del escritorio y publica `LIMPIA`, `CUBIERTA` (otra ventana encima) o
+`CON RESTOS`, de modo que la prueba no depende de capturas.
+
+Las barras de desplazamiento son las mismas en la ventana Archivos y en las dos
+apps: pista con marco, pulgar proporcional (minimo 18 px) y `scrollbar_first()`
+para traducir un clic o arrastre a la primera fila visible. Solo se dibujan si
+`total > visibles`. El raton PS/2 no tiene rueda, asi que el arrastre del pulgar
+y `Inicio`/`Fin` son la unica forma de recorrer el texto; el editor abandona el
+seguimiento del cursor mientras se arrastra y lo recupera con la siguiente tecla.
+
+El selector de archivos del editor es modal interno de la app (no del kernel):
+recorre el FS con `nodes`/`cwd`/`chdir`/`cwd_path`, guarda el `cwd` de entrada y
+lo restaura al cerrar para no mover el estado global que comparte con la ventana
+Archivos. Guardar siempre escribe en la carpeta mostrada con el nombre tecleado.
+El limite util es 1023 bytes (`FS_FILE_MAX_SIZE - 1`); el editor avisa al
+llegar y no deja que `write_file` falle por tamano.
+
+ABI 4 anade `launch_file`: `Archivos > Editar` y `GUI EDIT <archivo>` depositan
+la ruta antes de `elf_run` y la app la consume en una unica llamada (el kernel la
+borra al entregarla), lo que evita que una segunda ejecucion herede la ruta
+anterior. `elf_find()` resuelve el indice del modulo por nombre. El teclado
+entrega `TAB` como byte 9: la shell lo descarta por ser menor que 32 y las apps
+lo usan para abrir el selector y alternar Abrir/Guardar.
+
+La revision con capturas anadio dos correcciones al compositor. `raise_window()`
+comparaba `window->z == z_top` para no repintar de mas, pero una ventana recien
+creada llega con `z == 0` y ese es tambien el valor inicial de `z_top`, asi que
+se quedaba en 0 y `redraw_region()`, que recorre `z` desde 1, no la dibujaba:
+con `GUI RUN`/`GUI EDIT` la app se ejecutaba sin ventana visible. La guarda exige
+ahora `z > 0`. Ademas el marco de la app reservaba margen solo en el alto, de
+forma que las ultimas columnas de la superficie de la app caian fuera del
+recorte; el ancho pasa a `width + margin * 2 + 2` y la superficie ocupa
+exactamente el area interior. La verificacion visual vive en
+`scripts/verify_editor_capture.py` y guarda `artifacts/verificacion-*.png`.

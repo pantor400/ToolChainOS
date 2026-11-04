@@ -9,17 +9,19 @@ sigue compilando con `-mgeneral-regs-only`, sin libc y sin SSE/FPU.
 La resolución la entrega Limine y se fija en el build:
 
 ```bash
-make iso                     # 1920x1080x32 (perfil por defecto, pantalla completa HD)
-make iso RES=1280x800        # perfil compacto
-make run                     # ventana GTK del tamaño del modo del huesped
+make iso                     # 1280x720x32 (perfil por defecto, ventana 1:1)
+make iso RES=1920x1080       # perfil HD (pantalla completa)
+make iso RES=1280x800        # perfil compacto (mas alto)
+make run                     # ventana GTK de 1280x720 pixeles reales
 make run FULLSCREEN=1        # pantalla completa
 ```
 
-La ventana del emulador se abre con `-display gtk,zoom-to-fit=on`
-(`DISPLAY_QEMU`), de modo que se ajusta a la pantalla del anfitrion sin recortar
-el modo de video del huesped ni cambiar la resolucion interna. Con 1920x1080 el
-guest ocupa toda una pantalla Full HD; `FULLSCREEN=1` (o `run_vm.py --fullscreen`,
-o `QEMU_FULLSCREEN=1`) anade `-full-screen` para eliminar las decoraciones.
+La ventana del emulador se abre con `-display gtk,zoom-to-fit=off`
+(`DISPLAY_QEMU`): sin reescalado, QEMU usa el tamano exacto del modo del huesped
+(1280x720) y la resolucion interna no cambia. Para llenar la pantalla del
+anfitrion esta `make run DISPLAY_QEMU=gtk,zoom-to-fit=on`, y `FULLSCREEN=1` (o
+`run_vm.py --fullscreen`, o `QEMU_FULLSCREEN=1`) anade `-full-screen` para
+eliminar las decoraciones.
 
 `RES` se sella en `build/resolution.stamp`: cambiar de perfil reconstruye la ISO
 y el `sed` sobre `build/iso_root/boot/limine/limine.conf` no toca el
@@ -43,7 +45,8 @@ Makefile y las pruebas arrancan la misma máquina:
 
 | Perfil | Escala | Fuente pequeña | Cuerpo | Título | Ventana de app |
 |---|---|---|---|---|---|
-| 1920x1080 (defecto) | 2 | `reg21` | `reg30` | `bold40` | hasta 1860x860 |
+| 1280x720 (defecto) | 1 | `reg15` | `reg21` | `bold30` | hasta 1240x580 |
+| 1920x1080 (HD) | 2 | `reg21` | `reg30` | `bold40` | hasta 1860x860 |
 | 1280x800 (compacto) | 1 | `reg15` | `reg21` | `bold30` | hasta 1240x620 |
 
 `gui_init` rechaza cualquier framebuffer que no sea RGB de 32 bpp con máscaras de
@@ -53,8 +56,9 @@ dibujar basura.
 ## 2. Composición
 
 - El lienzo canónico es `0x00RRGGBB` en memoria normal, no en MMIO.
-- El doble buffer se reserva con `pmm_alloc_run`: 1920x1080x4 = 8,29 MB, muy por
-  encima del máximo del heap (512 KiB), de ahí el uso directo del PMM.
+- El doble buffer se reserva con `pmm_alloc_run`: 1280x720x4 = 3,52 MB y
+  1920x1080x4 = 8,29 MB, muy por encima del máximo del heap (512 KiB), de ahí el
+  uso directo del PMM.
 - Cada `present` convierte al framebuffer respetando
   `red_mask_shift`/`green_mask_shift`/`blue_mask_shift`; con 16/8/0 se usa la ruta
   rápida (una escritura de 32 bits por píxel).
@@ -100,17 +104,26 @@ Dos mecanismos, ambos sin rasterizar tipografías en caliente:
 2. **Iconos procedurales.** Cada icono se dibuja sobre un lienzo lógico 24x24
    (`IX/IY/IS`) y se escala por enteros, así que no hay PNG ni dependencia de
    decodificadores. `HOST_ICON_*` expone el mismo catálogo a las apps.
+3. **Imágenes horneadas.** `scripts/build_images.py` convierte `images/*.jpg|png`
+   a RGB565, recorta `wallpaper` al aspecto de `RES` y escribe un blob con
+   cabecera `TCOSIMG1` y entradas de 48 B; `objcopy` lo enlaza en
+   `.rodata.images` y `src/images.c` lo valida al arrancar. No hay decodificador
+   JPEG/PNG en el kernel; el fondo se escala con tablas por columna y fila y el
+   visor muestrea la imagen a su ventana.
 
-Consecuencia: el binario crece (~818 KiB de ELF) pero el arranque no decodifica
-nada y el render es una copia de máscaras.
+Consecuencia: el binario crece (~5,4 MiB de ELF con el fondo de 1280x720) pero el
+arranque no decodifica nada y el render es una copia de máscaras o de píxeles ya
+convertidos.
 
 ## 5. Escritorio y ventanas
 
 - Barra superior con título, estado de red, resolución y reloj (HH:MM) del CMOS.
-- Escritorio con tarjetas y dock inferior: Archivos, Red, Entrada, Apps.
+- Escritorio con tarjetas y dock inferior: Sistema, Archivos, Red, Entrada,
+  Imágenes y Apps, más `Salir`. El fondo es `images/wallpaper.jpg` convertido a
+  RGB565 y escalado al modo de vídeo; sin imágenes se usa el degradado.
 - Ventanas del sistema (`WIN_FILES`, `WIN_SYSTEM`, `WIN_NET`, `WIN_INPUT`,
-  `WIN_APPS`) y una ventana de aplicación (`WIN_APP`) que hospeda el lienzo de la
-  app. Cada tipo abre con un tamaño proporcional a la resolución.
+  `WIN_APPS`, `WIN_IMAGES`) y una ventana de aplicación (`WIN_APP`) que hospeda el
+  lienzo de la app. Cada tipo abre con un tamaño proporcional a la resolución.
 - **Ventana Sistema:** doce filas con CPU (vendor y modelo por CPUID), núcleos,
   RAM detectada y libre, heap, procesos e hilos, uptime del PIT, resolución, red
   (MAC/IP/enlace), ratón, teclado, despachos del planificador y archivos del FS.
@@ -118,10 +131,22 @@ nada y el render es una copia de máscaras.
   ultimo nombre resuelto, TX y RX. Los valores salen de `net_status()` y se
   actualizan con `RED PING`, `RED DNS` o `RED INTERNET` desde la shell.
 - **Ventana Archivos:** navegación con flechas y `Enter`, visor del contenido,
-  `n` archivo nuevo, `c` carpeta, `r` renombrar, `d`/`x` borrar, `Backspace` sube
-  de directorio y `ESC` cierra el visor o vuelve al escritorio. Las acciones
-  usan el mismo `fs_*` del kernel, con mensajes de error en la propia ventana.
-- Arrastre por la barra de título, cierre por el botón o con `ESC`.
+  barra de desplazamiento vertical (lista y visor), filas de tamaño fijo y
+  botones `Nuevo`, `Carpeta`, `Renombrar`, `Borrar` y `Editar`. Los atajos son
+  `n` archivo nuevo, `c` carpeta, `r` renombrar, `d`/`x` borrar, `e` abrir el
+  archivo marcado en el editor, `Backspace` sube de directorio y `ESC` cierra el
+  visor o vuelve al escritorio. Las acciones usan el mismo `fs_*` del kernel,
+  con mensajes de error en la propia ventana. `Editar` entrega la ruta al editor
+  por el `launch_file` del ABI. Los nodos internos (`/etc`, `/boot`, `/proc`,
+  `/wallpapers`) se pintan en ámbar con `RO` y deshabilitan `Borrar`/`Renombrar`
+  (y `Nuevo`/`Carpeta` dentro de una carpeta del sistema).
+- **Ventana Imágenes:** lista las imágenes del blob con su tamaño y una vista
+  previa escalada; las flechas cambian de imagen y `ESC` la cierra. Abrir un
+  `.jpg`, `.jpeg` o `.png` desde Archivos abre el visor en esa imagen (coincidencia
+  por nombre con el blob). Emite `GUI: VISOR IMAGENES` y `GUI: IMAGEN <n> WxH`.
+- Arrastre por la barra de título, cierre por el botón o con `ESC`. Todo cierre
+  pasa por `close_window()`, que invalida el área y el dock; la siguiente
+  presentación devuelve el fondo y no quedan restos del contenido anterior.
 - `GUI` abre la sesión interactiva; `GUI DEMO` dibuja un fotograma y vuelve a la
   consola; `GUI RUN <indice>` lanza un módulo ELF directamente.
 
@@ -186,7 +211,7 @@ resuelve dentro de ese sondeo.
 - Al terminar se liberan páginas y pila e imprime
   `ELF: FIN <nombre> CODIGO=<n>`.
 
-Contrato `host_api_t` (`HOST_ABI_VERSION == 3`) recibido en `RDI`:
+Contrato `host_api_t` (`HOST_ABI_VERSION == 5`) recibido en `RDI`:
 
 | Campo | Efecto |
 |---|---|
@@ -197,8 +222,10 @@ Contrato `host_api_t` (`HOST_ABI_VERSION == 3`) recibido en `RDI`:
 | `read_file`, `write_file` | Lectura y escritura de archivos del FS del kernel |
 | `make_dir`, `remove_node`, `rename_node` | Crear carpeta, borrar y renombrar |
 | `nodes`, `node_count`, `cwd`, `chdir`, `cwd_path` | Listado, directorio actual y navegación |
+| `is_system` | Indica si una ruta es un archivo interno de solo lectura |
 | `exec` | Ejecuta una orden del shell y devuelve su salida capturada |
 | `key` | Siguiente tecla extendida pendiente (`KB_KEY_*`) |
+| `launch_file` | Ruta con la que el escritorio lanzó la app; consume el valor |
 
 Eventos: `HOST_EV_NONE`, `MOVE`, `DOWN`, `UP`, `KEY`, `CLOSE`; las coordenadas ya
 vienen relativas al contenido de la ventana. Las teclas extendidas (flechas,
@@ -207,12 +234,22 @@ bytes ASCII; `HOST_KEY_TAB` sigue siendo `9`.
 
 Aplicaciones incluidas:
 
-- `apps/editor.c`: editor de texto de 2048 bytes con cursor movible, comandos con
-  `TAB` (`w nombre`, `o nombre`, `n`, `q`) y guardado/carga por `read_file` y
-  `write_file`.
-- `apps/terminal.c`: terminal con scrollback circular de 400 líneas, historial de
-  8 órdenes con las flechas y ejecución real vía `exec`; `limpiar` vacía la
-  pantalla y `salir` cierra la ventana.
+- `apps/editor.c`: editor de texto de 1023 bytes (límite del FS) con plantilla
+  en blanco sin nombre. Barra con `Nuevo`, `Abrir` y `Guardar`; `Abrir`/`Guardar`
+  abren un selector interno con el árbol del FS (ruta actual, `..`, lista con
+  barra de desplazamiento y campo de nombre al guardar). `TAB` abre el selector y
+  dentro alterna Abrir/Guardar, `Enter` confirma y `Q` cancela. El área de texto
+  muestra una barra vertical cuando el contenido no cabe y sigue al cursor salvo
+  mientras se arrastra el pulgar. Guarda y carga con `read_file`/`write_file`.
+  Los archivos internos se marcan `sistema` en el selector y se abren con
+  `[solo lectura]`: las teclas de edición no los modifican y `store_file`/`dlg_save`
+  rechazan escribir sobre ellos (`editor.elf: SOLO LECTURA <ruta>`).
+- `apps/terminal.c`: terminal con scrollback de 300 líneas e historial de 8
+  órdenes con las flechas y ejecución real vía `exec`; el ajuste se hace por
+  píxeles con `text_width`, cortando por palabras, y la línea de entrada recorta
+  por delante lo que no cabe. Barra vertical arrastrable cuando la salida no
+  cabe, `Inicio`/`Fin` para los extremos, `limpiar` vacía la pantalla y `salir`
+  cierra la ventana.
 
 El reloj de la barra sale de `rtc_now()` (`src/rtc.c`), que lee el CMOS
 compensando BCD/binario, 12/24 h y el bit de actualización en curso. QEMU se
@@ -231,16 +268,26 @@ barra cuando cambia el minuto.
 2. `RATON PS/2: ACTIVO` y, tras mover y pulsar por QMP, `IRQ_PAQUETES > 0`.
 3. `APLICACIONES ELF DISPONIBLES` con `editor.elf` y `terminal.elf`, y sin
    `hola.elf` ni `pintar.elf`.
-4. `GUI_READY RES=1920x1080` (o 1280x800) y `GUI_FRAME`, con la latencia de la
-   sesión medida entre `GUI` y `SESION FINALIZADA`.
-5. `SESION FINALIZADA` al salir con `ESC`.
-6. `ELF: EJECUTANDO editor.elf` → `ELF: FIN editor.elf CODIGO=0`, escribiendo
-   texto antes de salir; después la terminal ejecuta `help` y su salida aparece
-   por COM1 antes de volver al escritorio.
+4. `FS: ARCHIVOS DEL SISTEMA EN SOLO LECTURA` en el arranque.
+5. `GUI_READY RES=1280x720` (o el perfil elegido con `RES`), `GUI_FRAME` y
+   `GUI: FONDO IMAGEN <nombre> WxH`, con la latencia de la sesión medida entre
+   `GUI` y `SESION FINALIZADA`.
+6. `GUI: VISOR IMAGENES` tras pulsar el icono Imágenes del dock (clic por QMP),
+   y `SESION FINALIZADA` al salir con `ESC`.
+7. `editor.elf: PLANTILLA NUEVA`, `SELECTOR ABRIR`, `SELECTOR GUARDAR` y
+   `GUARDADO /demo2.txt` al escribir el nombre y pulsar `Enter`; el archivo se lee
+   después desde la terminal (`open demo2.txt`).
+8. `GUI: VENTANA CERRADA Editor de texto LIMPIA` al salir del editor, que valida
+   que el área cerrada vuelve al fondo del escritorio, y `ELF: FIN editor.elf
+   CODIGO=0`.
+9. `GUI EDIT demo2.txt` abre el editor con `ABIERTO /demo2.txt` (handoff ABI 5) y
+   `gui edit motd` desde `/etc` devuelve `editor.elf: SOLO LECTURA /etc/motd`.
+10. La terminal ejecuta `help` y su salida aparece por COM1 antes de volver al
+    escritorio.
 
 ```bash
 make test-gui
-make iso RES=1280x800 && python3 scripts/test_gui.py   # perfil compacto
+make iso RES=1920x1080 && python3 scripts/test_gui.py   # perfil HD
 ```
 
 ## 10. Límites conocidos
@@ -250,6 +297,10 @@ make iso RES=1280x800 && python3 scripts/test_gui.py   # perfil compacto
 - No hay modo usuario: las apps ELF corren en ring 0 con el `host_api_t` como
   única frontera; siguen siendo código de confianza.
 - Un único ratón y un único teclado; sin repetición automática ni rueda.
+- Las imágenes se convierten en el anfitrión: el kernel no decodifica JPEG/PNG,
+  acepta hasta 8 (`IMAGES_MAX`) y cada fondo de 1280x720 ocupa ~1,8 MiB del ELF.
+- Los archivos internos son de solo lectura y se vuelven a sembrar en cada
+  arranque; sus cambios no se persisten.
 - Una ventana de aplicación a la vez.
 - Sin TCP/IP ni IPv6 (solo ARP, ICMP y DNS sobre IPv4), DHCP, teclado USB,
   audio ni cambio de resolución en caliente.

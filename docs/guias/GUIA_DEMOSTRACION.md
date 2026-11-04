@@ -62,9 +62,12 @@ la consola COM1. En serial se conservan los caracteres UTF-8; la fuente gráfica
 solo cubre un repertorio latino limitado. No prometa Unicode gráfico completo.
 
 ## Escritorio, red, ratón y apps ELF
-La ISO por defecto arranca a 1920x1080, de modo que la ventana de QEMU ocupa una
-pantalla Full HD; `make run FULLSCREEN=1` la abre sin decoraciones. El perfil
-compacto sigue disponible reconstruyendo con `make iso RES=1280x800`.
+La ISO por defecto arranca a 1280x720 y la ventana de QEMU se abre con ese
+mismo tamano (sin zoom), de modo que el escritorio se ve a escala 1:1;
+`make run DISPLAY_QEMU=gtk,zoom-to-fit=on` la estira a la pantalla del anfitrion
+y `make run FULLSCREEN=1` la abre sin decoraciones. Los perfiles HD y compacto
+siguen disponibles reconstruyendo con `make iso RES=1920x1080` o
+`make iso RES=1280x800`.
 ~~~text
 RED
 RED PING 10.0.2.2
@@ -85,20 +88,36 @@ Desde Apps se lanza una aplicación ELF; también directamente:
 GUI RUN 0
 GUI RUN 1
 ~~~
-`editor.elf` (índice 0) abre un editor de texto: teclear, mover el cursor con las
-flechas y usar `TAB` para `w nombre` (guardar) u `o nombre` (abrir). `terminal.elf`
-(índice 1) ejecuta órdenes reales del shell —por ejemplo `help` o `ls`—, guarda
-historial con las flechas, `limpiar` borra la pantalla y `salir` cierra.
+`editor.elf` (índice 0) abre un editor de texto con una plantilla en blanco sin
+nombre. Los botones `Nuevo`, `Abrir` y `Guardar` de su barra hacen lo que dicen:
+`Abrir` y `Guardar` despliegan un selector con el árbol del sistema de archivos
+(ruta actual, `..` y lista de archivos) donde se elige qué leer y en qué carpeta
+dejar el texto escribiendo el nombre. Con el teclado, `TAB` abre el selector y
+dentro alterna Abrir/Guardar, `Enter` confirma y `Q` cancela. Si el texto no cabe
+aparece una barra vertical a la derecha que se puede pulsar y arrastrar.
+`terminal.elf` (índice 1) ejecuta órdenes reales del shell —por ejemplo `help` o
+`ls`—, guarda historial con las flechas, muestra su propia barra vertical cuando
+la salida no cabe (`Inicio`/`Fin` van a los extremos) y `limpiar` borra la
+pantalla mientras `salir` cierra.
+Para abrir un archivo concreto desde la shell: `GUI EDIT nota` (también sirve el
+botón `Editar` de la ventana Archivos).
 Al salir, ESC devuelve el control al kernel y la serie muestra
-`ELF: FIN <nombre> CODIGO=0`.
+`ELF: FIN <nombre> CODIGO=0`; la GUI informa `GUI: VENTANA CERRADA ... LIMPIA`
+para confirmar que el área de la ventana se devolvió al escritorio.
 La barra superior muestra la hora local junto a la resolución y la IP; `HORA`
 la imprime por consola con segundos y fecha.
 En la ventana Sistema se leen CPU, núcleos, RAM, heap, tareas, red, ratón y
 uptime; en Archivos, las flechas navegan, `Enter` abre, `n` crea un archivo,
-`c` una carpeta, `r` renombra y `d` borra.
+`c` una carpeta, `r` renombra, `d` borra y `e` abre el archivo en el editor.
 Todo se comprueba sin capturas con `make test-gui`: marcadores COM1 conducidos
 por QMP (`GUI_READY`, `GUI_FRAME`, `IRQ_PAQUETES`, `SESION FINALIZADA`), la
 latencia de la sesión gráfica y la ejecución de `help` desde la terminal.
+Para revisar el aspecto real están las capturas de
+`python3 scripts/verify_editor_capture.py`: `artifacts/verificacion-terminal-scroll.png`,
+`verificacion-editor-scroll.png`, `verificacion-editor-selector.png`,
+`verificacion-editor-guardar.png`, `verificacion-ventana-abierta.png` y
+`verificacion-ventana-cerrada.png`. La última demuestra que el escritorio
+recupera su fondo y el dock su estado al cerrar la ventana.
 
 ## Evidencia y cierre
 Mostrar seleccion-teclado.png, espanol-framebuffer.png, espanol-redibujado.png

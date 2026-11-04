@@ -43,4 +43,8 @@ int fs_copy(const char *src,const char *dst,char *err,size_t cap);
 void fs_tree(const char *path);
 const fs_node_t *fs_nodes(void);
 int fs_import(const fs_node_t *nodes);
+/* Nodos internos del sistema (/etc, /boot, /proc, /wallpapers): se listan y se
+ * leen como cualquier otro, pero el FS rechaza escribir, borrar o renombrar. */
+int fs_is_system(int index);
+int fs_is_system_path(const char *path);
 #endif

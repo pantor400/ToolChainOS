@@ -21,7 +21,7 @@ typedef struct {
 typedef enum {
     GUI_ICON_MONITOR = 0, GUI_ICON_FOLDER, GUI_ICON_GLOBE, GUI_ICON_PLAY,
     GUI_ICON_CLOSE, GUI_ICON_TERMINAL, GUI_ICON_INFO, GUI_ICON_CHIP,
-    GUI_ICON_ARROW, GUI_ICON_COUNT
+    GUI_ICON_ARROW, GUI_ICON_IMAGE, GUI_ICON_COUNT
 } gui_icon_t;
 
 typedef struct { int type, x, y, button; uint32_t key; } gui_event_t;
@@ -68,5 +68,13 @@ void gui_app_present(void);
 int  gui_pump(gui_event_t *event);
 int  gui_app_width(void);
 int  gui_app_height(void);
+
+/* Ruta que el escritorio entrega a la proxima aplicacion (Archivos > Editar o
+ * GUI EDIT). El editor la consume al arrancar mediante host_api launch_file. */
+void gui_launch_file_set(const char *path);
+const char *gui_launch_file(void);
+void gui_launch_file_clear(void);
+/* Abre el editor con esa ruta; 0 si el modulo no esta en la ISO. */
+int  gui_launch_editor(const char *path);
 
 #endif

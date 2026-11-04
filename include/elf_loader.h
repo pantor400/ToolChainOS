@@ -14,6 +14,8 @@ unsigned elf_count(void);
 const char *elf_name(unsigned index);
 size_t elf_size(unsigned index);
 int elf_run(unsigned index);
+/* Indice del modulo con ese nombre, -1 si no esta en la ISO. */
+int elf_find(const char *name);
 void elf_list(void);
 void elf_command(const char *args);
 int elf_busy(void);

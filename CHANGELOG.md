@@ -141,3 +141,107 @@ se repinta cuando cambia el minuto y el nuevo comando `HORA`/`TIME` imprime
 `HH:MM:SS DD/MM/AAAA`. Se retira `apps/pintar.c` y su modulo de `limine.conf`;
 `test_gui.py` valida ahora el reloj por COM1 y solo exige `editor.elf` y
 `terminal.elf`.
+
+## 2026-11-03 Resolución 1280x720 y ventana de QEMU ajustada al modo
+`RES` pasa a 1280x720 (`limine.conf` versionado declara 1280x720x32) y
+`DISPLAY_QEMU` a `gtk,zoom-to-fit=off`: `make run`, `debug`, `trace` y `uefi`
+abren la ventana del emulador con el tamaño exacto del modo del huésped, sin
+escalarla a la pantalla del anfitrión. Para llenar la pantalla siguen
+disponibles `DISPLAY_QEMU=gtk,zoom-to-fit=on` y `FULLSCREEN=1`, y los perfiles
+1920x1080 y 1280x800 con `make iso RES=...`. `run_vm.py` usa el mismo valor por
+defecto. El escritorio usa el juego compacto de tipografías (escala 1) y el
+doble buffer baja a 3,52 MB.
+
+## 2026-11-03 Cierre de ventanas, desplazamiento y editor con selector
+El cierre de ventanas dejaba restos: el botón de la barra de título marcaba el
+slot como libre sin invalidar su rectángulo, así que el escritorio conservaba el
+último fotograma. Ahora hay una única `close_window()` que daña el área (más el
+dock), la usa también `toggle_window`, `gui_app_close` y `handle_press`, y
+`gui_app_close` repinta y vuelca en el acto para que `GUI RUN` no deje restos al
+volver a la consola. `repaint_pending()` informa por COM1
+`GUI: VENTANA CERRADA <titulo> LIMPIA|CUBIERTA|CON RESTOS` para validarlo sin
+capturas.
+
+La ventana Archivos estrena barra de desplazamiento vertical (lista y visor),
+botones Nuevo/Carpeta/Renombrar/Borrar/Editar y la tecla `E` para abrir el
+archivo marcado en el editor. La barra es compartida con las apps mediante el
+mismo criterio de pulgar proporcional. `host_api_t` sube a ABI 4 con
+`launch_file`: la ruta viaja del escritorio a la app y se consume una sola vez.
+El kernel añade `GUI EDIT <archivo>` y `elf_find()`.
+
+`apps/editor.c` se reescribe: arranca con plantilla en blanco sin nombre, barra
+con Nuevo/Abrir/Guardar, selector interno del sistema de archivos (navegación,
+`..`, scrollbar y campo de nombre al guardar), `TAB` abre el selector y alterna
+Abrir/Guardar, límite de 1023 bytes del FS y marcadores `editor.elf: ABIERTO`,
+`GUARDADO` y `SIN ARCHIVO` por COM1. `apps/terminal.c` añade barra vertical con
+pulgar arrastrable, `Inicio`/`Fin` para ir a los extremos y vuelta al final al
+ejecutar. El teclado PS/2 entrega `TAB` (byte 9); la shell lo ignora.
+`test_gui.py` comprueba plantilla nueva, ambos modos del selector, guardado en la
+ruta elegida, lectura del archivo desde la terminal, `GUI EDIT` y la limpieza
+del área al cerrar el editor.
+
+La verificación con capturas (`scripts/verify_editor_capture.py`, imágenes
+`artifacts/verificacion-*.png`) destapó dos fallos que las pruebas por serie no
+podían ver. `raise_window()` comparaba `window->z == z_top` y una ventana nueva
+llega con ambos a 0, así que `redraw_region()` —que recorre z desde 1— nunca la
+pintaba: con `GUI RUN` o `GUI EDIT` la app corría y respondía, pero su ventana
+no aparecía hasta abrir otra desde el dock. Y el marco sumaba margen solo al
+alto, de modo que las últimas columnas de la superficie de la app quedaban
+recortadas (la barra del editor caía justo ahí); ahora el ancho reserva
+`margin * 2`. El script abre terminal y editor por QMP, captura con
+`screendump`, comprueba las barras y el selector, y abre/cierra la ventana de
+aplicaciones para dejar constancia de que el escritorio vuelve limpio.
+
+## 2026-11-03 Terminal sin recortes, archivos internos y fondo con imagen
+La terminal cortaba el texto porque partía de 82 columnas fijas aunque el área
+útil dependiera del ancho de la ventana. Ahora mide cada carácter con
+`text_width`, ajusta por palabras y retrocede al último espacio; la línea de
+entrada recorta por delante lo que no cabe y el historial crece a 300 líneas con
+su ancho guardado por fila.
+
+El sistema de archivos incorpora archivos internos del SO en `/etc` (motd,
+os-release, hostname, fstab), `/boot/limine.conf`, `/proc` (version, cpuinfo) y
+`/wallpapers/wallpaper.jpg`. Se siembran en cada arranque e importación de disco
+con una tabla paralela `system_nodes[]` (el snapshot de 1064 B por nodo no
+cambia) y se restauran sus contenidos, de modo que `RM`, `REN`, `COPY` y las
+escrituras fallan con `ARCHIVO DEL SISTEMA: SOLO LECTURA`. `fs_list_dir` los
+marca `[SYS]`; la ventana Archivos los pinta en ámbar con `RO` y deshabilita
+Borrar/Renombrar; el editor los abre con `[solo lectura]` y bloquea las teclas de
+edición. `host_api_t` sube a ABI 5 con `is_system`.
+
+Nuevo pipeline de imágenes en el anfitrión: `scripts/build_images.py` convierte
+`images/*.jpg|png` a RGB565, recorta `wallpaper` al aspecto de `RES` y escribe un
+blob validado que `objcopy` enlaza en `.rodata.images`; `src/images.c` lo
+recorre y `gui.c` escala el fondo con tablas por columna y fila, con el degradado
+como respaldo si no hay imágenes. La ventana **Imágenes** del dock lista las
+imágenes empaquetadas con tamaño y vista previa, y abrir un `.jpg`/`.png` desde
+Archivos lleva al visor. Objetivos nuevos `make images` e `make images-check`;
+requiere Pillow. `test_gui.py` comprueba el sembrado de archivos internos, el
+fondo por imagen, el visor desde el dock y el editor en solo lectura sobre
+`/etc/motd`; `README.md` documenta las rutas, el pipeline y los límites.
+
+## 2026-11-03 Recorte por caracteres y ventana activa
+La salida de una orden en la terminal se truncaba siempre en el mismo punto:
+`api->exec()` copiaba en un buffer de 640 B y `HELP` (unos 2.6 KiB) quedaba
+cortado a media palabra. Sube a 4096 B y el eco `OS> orden` arranca en línea
+nueva cuando la salida anterior no terminó con `\n`, de modo que dos salidas
+seguidas ya no se pegan. Sobre el dibujo, `draw_clipped()` mide la cadena antes
+de pintarla y, si no cabe, la recorta por puntos de código UTF-8 completos: se
+aplica a la ruta, a cada renglón y al pie de ayuda, que así nunca invaden la
+barra de desplazamiento ni el borde del recuadro.
+
+Con varias ventanas abiertas cada tecla se entregaba a `files_key()` y a
+`images_key()` a la vez. El escritorio guarda ahora `focus_slot` y solo la
+ventana activa recibe el teclado (`active_key()`); el foco lo toma la ventana al
+abrirse, al pulsarla o al subirla desde el dock, y al cerrarla hereda la de más
+arriba. La activa se distingue por el título y el marco en azul de acento y
+emite `GUI: VENTANA ACTIVA <titulo>` (o `GUI: SIN VENTANA ACTIVA`) por COM1;
+`gui_pump()` descarta las teclas si la app no tiene el foco. `test_gui.py`
+comprueba el cambio de foco desde el dock y que las flechas ya no mueven la
+imagen de la ventana inactiva; `README.md` describe el reparto del teclado.
+
+El marco era `gui_frame()`, un rectángulo de un píxel que dejaba un pico en cada
+esquina del panel redondeado. `round_frame()` recorre el mismo trazado que
+`gui_round()` y pinta por filas el tramo que la curva gana respecto a la
+anterior, de modo que el contorno (azul en la activa) sigue las esquinas y queda
+continuo; la sombra se redondea también para no asomar cuadrada por detrás.

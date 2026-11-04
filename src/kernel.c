@@ -153,6 +153,16 @@ static void gui_command(const char *args){
         gui_shutdown();
         return;
     }
+    /* GUI EDIT <ruta>: abre el editor ELF con el archivo indicado. La ruta se
+     * pasa por el handoff de host_api y admite rutas relativas al directorio
+     * actual del sistema de archivos. */
+    if(ci_same(first,"EDIT")){
+        const char *rest=skip_spaces(argument+used);
+        if(!*rest)console_write("USO: GUI EDIT <ARCHIVO>.\n");
+        else if(!gui_launch_editor(rest))console_write("GUI: NO SE PUDO ABRIR EL EDITOR.\n");
+        gui_shutdown();
+        return;
+    }
     gui_run();
 }
 
@@ -252,6 +262,7 @@ static void help(void){
         "    RUN CPP [archivo]      INTERPRETE C LIMITADO; ALIAS RUN_CPP\n"
         "  INTERFAZ GRAFICA, RED Y APLICACIONES\n"
         "    GUI | ESCRITORIO        ABRE LA INTERFAZ; GUI DEMO UN FOTOGRAMA\n"
+        "    GUI EDIT <archivo>      ABRE EL EDITOR CON ESE ARCHIVO\n"
         "    RATON                   RATON/TOUCHPAD PS/2: POSICION Y BOTONES\n"
         "    HORA | TIME             HORA LOCAL DEL ANFITRION (TAMBIEN EN LA BARRA)\n"
         "    RED [ARP]               RTL8139: MAC, ENLACE Y ARP A LA PUERTA\n"

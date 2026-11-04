@@ -5,8 +5,10 @@
 /* Contrato estable entre el kernel y las aplicaciones ELF. Las apps se
  * enlazan con apps/app.ld como PIE estatico y reciben este puntero en RDI.
  * Cambiar el orden o el tipo de un campo obliga a subir HOST_ABI_VERSION.
- * v3 anade sistema de archivos, teclas extendidas y ejecucion de ordenes. */
-#define HOST_ABI_VERSION 3u
+ * v3 anade sistema de archivos, teclas extendidas y ejecucion de ordenes.
+ * v4 anade la ruta con la que el escritorio lanza la aplicacion.
+ * v5 anade la consulta de archivos internos del sistema (solo lectura). */
+#define HOST_ABI_VERSION 5u
 
 struct fs_node;
 
@@ -58,6 +60,15 @@ typedef struct host_api {
     int  (*exec)(const char *line, char *out, int capacity);
     /* Siguiente tecla extendida (KB_KEY_*); 0 si no hay ninguna pendiente. */
     int  (*key)(void);
+    /* --- v4 ------------------------------------------------------------- */
+    /* Ruta con la que el escritorio lanzo la app (Archivos > Editar o
+     * GUI EDIT <archivo>); cadena vacia si no hay ninguna. Cada llamada
+     * consume el valor: la app debe copiarlo antes de volver a pedirlo. */
+    const char *(*launch_file)(void);
+    /* --- v5 ------------------------------------------------------------- */
+    /* 1 si la ruta es un archivo interno del sistema: se puede leer pero no
+     * escribir, borrar ni renombrar. El editor lo muestra en solo lectura. */
+    int  (*is_system)(const char *path);
 } host_api_t;
 
 #endif

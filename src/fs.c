@@ -3,6 +3,13 @@
 #include "util.h"
 
 static fs_node_t nodes[FS_MAX_NODES];
+/* Marca de nodo interno. Va en una tabla paralela a proposito: fs_node_t se
+ * serializa campo a campo en snapshots de 1064 bytes y anadirle un campo
+ * romperia los discos creados con versiones anteriores. */
+static unsigned char system_nodes[FS_MAX_NODES];
+/* Durante la siembra inicial se permiten crear nodos dentro de directorios del
+ * sistema; fuera de ella el FS los rechaza. */
+static int seeding;
 static int cwd_idx;
 static int fail(char *e,size_t n,const char *s){copystr(e,s,n);return 0;}
 static int valid_name(const char *s){
@@ -59,6 +66,7 @@ static int parent(const char *dir,const char *name,char *e,size_t n){
     if(!valid_name(name)){fail(e,n,"NOMBRE INVALIDO O DEMASIADO LARGO.");return -1;}
     int p=fs_find_node(dir?dir:"");
     if(p<0||nodes[p].type!=FS_TYPE_DIR){fail(e,n,"CARPETA DESTINO INVALIDA.");return -1;}
+    if(!seeding&&system_nodes[p]){fail(e,n,"CARPETA DEL SISTEMA: SOLO LECTURA.");return -1;}
     if((p?path_length(p):0)+1+slen(name)>=FS_PATH_MAX){fail(e,n,"RUTA DEMASIADO LARGA.");return -1;}
     return p;
 }
@@ -73,6 +81,7 @@ int fs_create_file(const char *dir,const char *name,const char *text,char *e,siz
     if(slen(text)>=FS_FILE_MAX_SIZE)return fail(e,n,"CONTENIDO EXCEDE 1023 BYTES.");
     int p=parent(dir,name,e,n);if(p<0)return 0;
     int i=child(p,name);
+    if(i>=0&&system_nodes[i])return fail(e,n,"ARCHIVO DEL SISTEMA: SOLO LECTURA.");
     if(i>=0&&nodes[i].type!=FS_TYPE_FILE)return fail(e,n,"YA EXISTE UNA CARPETA CON ESE NOMBRE.");
     if(i<0)i=alloc_node();
     if(i<0)return fail(e,n,"SISTEMA DE ARCHIVOS LLENO.");
@@ -90,6 +99,7 @@ const char *fs_read_file(const char *path,uint32_t *size){
 }
 int fs_remove(const char *path,int directory,char *e,size_t n){
     int i=fs_find_node(path);if(i<=0)return fail(e,n,"NO EXISTE O ES RAIZ.");
+    if(system_nodes[i])return fail(e,n,"ARCHIVO DEL SISTEMA: SOLO LECTURA.");
     if(nodes[i].type!=(directory?FS_TYPE_DIR:FS_TYPE_FILE))return fail(e,n,"TIPO INCORRECTO.");
     if(i==cwd_idx)return fail(e,n,"NO SE PUEDE BORRAR DIRECTORIO ACTUAL.");
     for(int j=1;j<FS_MAX_NODES;j++)if(nodes[j].type&&nodes[j].parent_idx==i)return fail(e,n,"CARPETA NO VACIA.");
@@ -97,6 +107,7 @@ int fs_remove(const char *path,int directory,char *e,size_t n){
 }
 int fs_rename(const char *path,const char *name,char *e,size_t n){
     int i=fs_find_node(path);if(i<=0)return fail(e,n,"NO EXISTE O ES RAIZ.");
+    if(system_nodes[i])return fail(e,n,"ARCHIVO DEL SISTEMA: SOLO LECTURA.");
     if(!valid_name(name))return fail(e,n,"NOMBRE INVALIDO.");
     int duplicate=child(nodes[i].parent_idx,name);
     if(duplicate>=0&&duplicate!=i)return fail(e,n,"YA EXISTE UN ELEMENTO CON ESE NOMBRE.");
@@ -116,7 +127,7 @@ void fs_list_dir(const char *path){
     int p=fs_find_node(path?path:"");if(p<0||nodes[p].type!=FS_TYPE_DIR){console_write("CARPETA NO ENCONTRADA.\n");return;}
     console_write("CONTENIDO DE: ");console_write(nodes[p].name);console_putc('\n');int count=0;
     for(int i=1;i<FS_MAX_NODES;i++)if(nodes[i].type&&nodes[i].parent_idx==p){
-        count++;console_write(nodes[i].type==FS_TYPE_DIR?"  [DIR] ":"  [TXT] ");console_write(nodes[i].name);
+        count++;console_write(nodes[i].type==FS_TYPE_DIR?"  [DIR] ":(system_nodes[i]?"  [SYS] ":"  [TXT] "));console_write(nodes[i].name);
         if(nodes[i].type==FS_TYPE_FILE){console_write(" (");console_dec(nodes[i].size);console_write(" B)");}console_putc('\n');
     }
     if(!count)console_write("  (CARPETA VACIA)\n");
@@ -135,6 +146,7 @@ void fs_tree(const char *path){
     }
 }
 const fs_node_t *fs_nodes(void){return nodes;}
+static void fs_seed_system(void);
 /* Validate the entire imported graph before committing any node. */
 int fs_import(const fs_node_t *in){
     for(int i=0;i<FS_MAX_NODES;i++)if(in[i].name[FS_NAME_MAX-1]||in[i].content[FS_FILE_MAX_SIZE-1])return 0;
@@ -151,10 +163,71 @@ int fs_import(const fs_node_t *in){
         for(int j=1;j<i;j++)if(in[j].type&&in[i].parent_idx==in[j].parent_idx&&ci_same(in[i].name,in[j].name))return 0;
     }
     for(int i=0;i<FS_MAX_NODES;i++)nodes[i]=in[i];
-    cwd_idx=0;return 1;
+    zero(system_nodes,sizeof(system_nodes));
+    cwd_idx=0;fs_seed_system();return 1;
 }
+/* Contenido de los ficheros internos. Se copia siempre al sembrar para que un
+ * snapshot manipulado no pueda alterar los datos del sistema. */
+typedef struct { const char *path; const char *content; } system_seed_t;
+static const system_seed_t system_seeds[] = {
+    {"/etc", 0},
+    {"/etc/motd", "Bienvenido a ToolchainOS.\nSistema operativo didactico de 64 bits.\nConsola, red, GUI y aplicaciones ELF.\n"},
+    {"/etc/os-release", "NAME=ToolchainOS\nVERSION=3.1\nID=toolchainos\nPRETTY_NAME=ToolchainOS 3.1\n"},
+    {"/etc/hostname", "toolchainos\n"},
+    {"/etc/fstab", "# origen  destino  tipo  opciones\n/dev/sda /       ata   ro\nramfs    /tmp    ram   rw\n"},
+    {"/boot", 0},
+    {"/boot/limine.conf", "timeout: 0\n/Toolchain OS - 64 bits\n    protocol: limine\n    path: boot():/boot/kernel.elf\n    resolution: 1280x720x32\n    module_path: boot():/boot/apps/editor.elf\n    module_path: boot():/boot/apps/terminal.elf\n"},
+    {"/proc", 0},
+    {"/proc/version", "ToolchainOS 3.1 (x86_64) kernel propio sin libc\n"},
+    {"/proc/cpuinfo", "vendor_id: ToolchainOS\ncpu family: x86_64\nflags: paging apic pit ps2 ata\n"},
+    {"/wallpapers", 0},
+    {"/wallpapers/wallpaper.jpg", "Imagen del escritorio de ToolchainOS.\nSe empaqueta desde images/wallpaper.jpg al compilar.\nArchivo del sistema: solo lectura.\n"},
+    {"/wallpapers/LEEME", "Para cambiar el fondo copia tu imagen en images/wallpaper.jpg\ny ejecuta make iso. El build la convierte a RGB565 y la\nincrusta en el kernel.\n"},
+};
+#define SYSTEM_SEEDS ((int)(sizeof(system_seeds) / sizeof(system_seeds[0])))
+
+static void seed_one(const system_seed_t *seed){
+    char dir[FS_PATH_MAX], name[FS_NAME_MAX], error[48];
+    if(!fs_split(seed->path, dir, name)) return;
+    int index = fs_find_node(seed->path);
+    if(index >= 0){
+        /* La ruta ya existe: se restaura el contenido interno y se re-marca. */
+        if(seed->content && nodes[index].type == FS_TYPE_FILE){
+            copystr(nodes[index].content, seed->content, FS_FILE_MAX_SIZE);
+            nodes[index].size = (uint32_t)slen(seed->content);
+        }
+    } else if(seed->content){
+        if(!fs_create_file(dir, name, seed->content, error, sizeof(error))) return;
+        index = fs_find_node(seed->path);
+    } else {
+        if(!fs_mkdir(dir, name, error, sizeof(error))) return;
+        index = fs_find_node(seed->path);
+    }
+    if(index > 0) system_nodes[index] = 1;
+}
+
+/* Crea los nodos internos que falten y vuelve a marcarlos todos: los snapshots
+ * no guardan la marca, solo el arbol, asi que hay que restaurarla al importar. */
+static void fs_seed_system(void){
+    if(seeding) return;
+    seeding = 1;
+    for(int i = 0; i < SYSTEM_SEEDS; i++) seed_one(&system_seeds[i]);
+    seeding = 0;
+    console_write("FS: ARCHIVOS DEL SISTEMA EN SOLO LECTURA\n");
+}
+
+int fs_is_system(int index){
+    return index > 0 && index < FS_MAX_NODES && system_nodes[index];
+}
+int fs_is_system_path(const char *path){
+    int index = fs_find_node(path);
+    return index >= 0 && fs_is_system(index);
+}
+
 void fs_init(void){
-    zero(nodes,sizeof(nodes));nodes[0].type=FS_TYPE_DIR;copystr(nodes[0].name,"/",FS_NAME_MAX);cwd_idx=0;
+    zero(nodes,sizeof(nodes));zero(system_nodes,sizeof(system_nodes));seeding=0;
+    nodes[0].type=FS_TYPE_DIR;copystr(nodes[0].name,"/",FS_NAME_MAX);cwd_idx=0;
+    fs_seed_system();
     fs_create_file("/","script","int main() {\n    int sum = 0;\n    for (int i = 1; i <= 10; i++) {\n        sum += i;\n    }\n    return sum;\n}\n",NULL,0);
     fs_create_file("/","nota","Bienvenido a ToolchainOS.\nGestion de archivos y ejecutor de scripts C++ activo.\n",NULL,0);
 }

@@ -5,6 +5,7 @@
 #include "elf_loader.h"
 #include "fs.h"
 #include "heap.h"
+#include "images.h"
 #include "interrupts.h"
 #include "keyboard.h"
 #include "mouse.h"
@@ -17,12 +18,12 @@
 
 /* --- Estado global ------------------------------------------------------ */
 
-#define GUI_WINDOW_COUNT 5
+#define GUI_WINDOW_COUNT 6
 #define CURSOR_W 13
 #define CURSOR_H 19
 
-enum { WIN_SYSTEM = 1, WIN_FILES, WIN_NET, WIN_INPUT, WIN_APPS, WIN_APP };
-enum { SLOT_SYSTEM = 0, SLOT_FILES, SLOT_NET, SLOT_INPUT, SLOT_APPS };
+enum { WIN_SYSTEM = 1, WIN_FILES, WIN_NET, WIN_INPUT, WIN_APPS, WIN_IMAGES, WIN_APP };
+enum { SLOT_SYSTEM = 0, SLOT_FILES, SLOT_NET, SLOT_INPUT, SLOT_APPS, SLOT_IMAGES };
 
 typedef struct {
     int used, kind, x, y, width, height, z;
@@ -36,12 +37,15 @@ typedef struct { int icon; const char *label; int kind; } dock_item_t;
 enum { FILES_NONE = 0, FILES_NEW_FILE, FILES_NEW_DIR, FILES_RENAME };
 typedef struct {
     int selected, scroll, viewer, view_top, action;
+    int drag;                 /* 1 = barra del listado, 2 = barra del visor */
     char input[FS_NAME_MAX];
     size_t input_len;
     char message[72];
 } files_state_t;
 static files_state_t files;
 static int files_ids[FS_MAX_NODES];
+/* Visor de imagenes: indice marcado dentro del blob empaquetado. */
+static int images_selected;
 
 static struct limine_framebuffer *device;
 static gui_surface_t back;
@@ -55,6 +59,9 @@ static int clip_x, clip_y, clip_w, clip_h;
 static int active, direct_mode, want_exit;
 static gui_window_t windows[GUI_WINDOW_COUNT];
 static int z_top;
+/* Ventana activa: es la unica que recibe el teclado y la que se resalta en el
+ * titulo. -1 significa que ninguna lo esta. */
+static int focus_slot = -1;
 static int scale;
 static int margin, bar_height, dock_height, dock_y, content_y, content_height;
 static int icon_size, title_height, radius;
@@ -69,12 +76,17 @@ static int paint_x0, paint_y0, paint_x1, paint_y1;
 static int cursor_drawn_x = -1, cursor_drawn_y = -1;
 static int dock_hover = -1;
 static uint32_t gradient[256];
+/* Fondo: si el kernel lleva imagenes empaquetadas, la primera (wallpaper) se
+ * escala a la pantalla con tablas de muestreo; si no, queda el degradado. */
+static int wall_index = -1, wall_ready;
+static uint16_t wall_x[4096], wall_y[4096];
 
 static const dock_item_t dock_items[] = {
     {GUI_ICON_MONITOR, "Sistema", WIN_SYSTEM},
     {GUI_ICON_FOLDER, "Archivos", WIN_FILES},
     {GUI_ICON_GLOBE, "Red", WIN_NET},
     {GUI_ICON_CHIP, "Entrada", WIN_INPUT},
+    {GUI_ICON_IMAGE, "Imagenes", WIN_IMAGES},
     {GUI_ICON_PLAY, "Apps", WIN_APPS},
 };
 #define DOCK_ITEMS ((int)(sizeof(dock_items) / sizeof(dock_items[0])))
@@ -273,6 +285,39 @@ void gui_round(int x, int y, int width, int height, int r, uint32_t rgb) {
     }
 }
 
+/* Contorno de un pixel que sigue la silueta de gui_round: el marco de una
+ * ventana no puede ser recto si su relleno es redondeado, o las esquinas
+ * muestran picos grises. Recorre el mismo trazado y, en cada fila, pinta el
+ * tramo que la curva gana respecto a la anterior; con un solo pixel por fila
+ * la esquina quedaba punteada. */
+static void round_frame(int x, int y, int width, int height, int r, uint32_t rgb) {
+    if (width <= 0 || height <= 0) return;
+    if (r * 2 > width) r = width / 2;
+    if (r * 2 > height) r = height / 2;
+    if (r <= 0) { gui_frame(x, y, width, height, rgb); return; }
+    gui_fill(x + r, y, width - 2 * r, 1, rgb);
+    gui_fill(x + r, y + height - 1, width - 2 * r, 1, rgb);
+    gui_fill(x, y + r, 1, height - 2 * r, rgb);
+    gui_fill(x + width - 1, y + r, 1, height - 2 * r, rgb);
+    int previous = 0;                          /* avance de la fila de arriba */
+    for (int row = 0; row < r; row++) {
+        int offset = r - 1 - row;
+        int dx = isqrt_int(r * r - offset * offset);
+        int left = x + r - dx;
+        int left_span = (row ? x + r - previous : x + r) - left;
+        int right_end = x + width - r + dx;
+        int right = row ? x + width - r + previous : x + width - r;
+        int right_span = right_end - right;
+        if (left_span < 1) left_span = 1;
+        if (right_span < 1) { right_span = 1; right = right_end - 1; }
+        gui_fill(left, y + row, left_span, 1, rgb);
+        gui_fill(right, y + row, right_span, 1, rgb);
+        gui_fill(left, y + height - 1 - row, left_span, 1, rgb);
+        gui_fill(right, y + height - 1 - row, right_span, 1, rgb);
+        previous = dx;
+    }
+}
+
 /* --- Tipografia --------------------------------------------------------- */
 
 static const gui_glyph_t *find_glyph(const gui_font_t *font, uint32_t codepoint) {
@@ -419,6 +464,14 @@ void gui_icon(int icon, int x, int y, int size, uint32_t rgb) {
         icon_line(IX(5), IY(19), IX(17), IY(7), rgb, u);
         icon_line(IX(9), IY(6), IX(18), IY(6), rgb, u);
         icon_line(IX(18), IY(6), IX(18), IY(15), rgb, u);
+        break;
+    case GUI_ICON_IMAGE:
+        icon_frame(IX(2), IY(5), IS(20), IS(15), rgb, u);
+        gui_fill(IX(6), IY(9), IS(3), IS(3), rgb);
+        icon_line(IX(4), IY(18), IX(10), IY(11), rgb, u);
+        icon_line(IX(10), IY(11), IX(14), IY(16), rgb, u);
+        icon_line(IX(14), IY(16), IX(17), IY(13), rgb, u);
+        icon_line(IX(17), IY(13), IX(21), IY(18), rgb, u);
         break;
     default:
         gui_round(IX(4), IY(4), IS(16), IS(16), IS(4), rgb);
@@ -578,6 +631,7 @@ static void window_default(gui_window_t *window, int kind, int slot) {
     if (kind == WIN_APPS) { w = back.width / 4; h = content_height * 2 / 5; }
     if (kind == WIN_SYSTEM) { w = back.width / 3; h = content_height * 4 / 5; }
     if (kind == WIN_FILES) { w = back.width * 2 / 5; h = content_height * 3 / 4; }
+    if (kind == WIN_IMAGES) { w = back.width / 2; h = content_height * 3 / 4; }
     int step = margin * 4;
     window->used = 1;
     window->kind = kind;
@@ -605,10 +659,47 @@ static int hit(int x, int y, int width, int height, int px, int py) {
     return px >= x && py >= y && px < x + width && py < y + height;
 }
 
+static void invalidate_window(const gui_window_t *window);
+
+static gui_window_t *focused_window(void) {
+    if (focus_slot < 0 || focus_slot >= GUI_WINDOW_COUNT) return 0;
+    return windows[focus_slot].used ? &windows[focus_slot] : 0;
+}
+
+/* Activar una ventana cambia el resaltado del titulo y, con el, a quien va el
+ * teclado; el cambio se deja por serie para las pruebas sin capturas. */
+static void set_focus(int slot) {
+    if (slot == focus_slot) return;
+    gui_window_t *previous = focused_window();
+    focus_slot = slot;
+    gui_window_t *current = focused_window();
+    if (previous) invalidate_window(previous);
+    if (current) {
+        invalidate_window(current);
+        console_write("GUI: VENTANA ACTIVA ");
+        console_write(current->title);
+        console_putc('\n');
+    } else {
+        console_write("GUI: SIN VENTANA ACTIVA\n");
+    }
+}
+
+/* Al cerrar la ventana activa hereda el foco la que queda mas arriba. */
+static void focus_topmost(void) {
+    int best = -1, best_z = 0;
+    for (int i = 0; i < GUI_WINDOW_COUNT; i++)
+        if (windows[i].used && windows[i].z > best_z) { best_z = windows[i].z; best = i; }
+    set_focus(best);
+}
+
 /* Subir una ventana cambia el orden z, asi que hay que repintar el area de
- * trabajo; si ya estaba arriba no se toca nada. */
+ * trabajo; si ya estaba arriba no se toca nada. Una ventana nueva llega con
+ * z == 0, el mismo valor que z_top antes de abrir la primera: comparar sin
+ * mas la dejaria sin z y redraw_region() nunca la pintaria. Subirla tambien la
+ * activa: el clic que la trae al frente es la forma de elegir donde se trabaja. */
 static void raise_window(gui_window_t *window) {
-    if (window->z == z_top) return;
+    set_focus((int)(window - windows));
+    if (window->z > 0 && window->z == z_top) return;
     window->z = ++z_top;
     invalidate(0, content_y, back.width, content_height);
 }
@@ -746,17 +837,140 @@ static int files_rows(int *ids, int capacity) {
 
 static int files_row_height(void) { return font_small->height + font_small->line_gap + 4; }
 
-static int files_body_y(const gui_window_t *window) {
-    return window_content_top(window) + margin * 2 + font_small->height + font_small->line_gap + 10;
+/* Zonas del explorador: cabecera con la ruta, listado/visor, acciones y
+ * linea de estado. Las filas visibles salen del espacio restante. */
+typedef struct {
+    int x, y, width, height, header, body, body_end, rows, actions;
+} files_layout_t;
+
+static int files_action_height(void) { return font_small->height + margin * 2; }
+static int files_status_height(void) { return font_small->height + 4; }
+
+static void files_layout(const gui_window_t *window, files_layout_t *out) {
+    out->x = window_content_x(window) + margin;
+    out->y = window_content_top(window) + margin;
+    out->width = window_content_width(window) - margin * 2;
+    out->height = window_content_height(window) - margin * 2;
+    if (out->width < 0) out->width = 0;
+    if (out->height < 0) out->height = 0;
+    out->header = out->y + margin + font_small->height + font_small->line_gap + 4;
+    out->body = out->header + 6;
+    out->actions = out->y + out->height - files_action_height() - files_status_height();
+    out->body_end = out->actions - 6;
+    out->rows = (out->body_end - out->body) / files_row_height();
+    if (out->rows < 1) out->rows = 1;
+}
+
+/* --- Barra de desplazamiento vertical ------------------------------------ */
+
+#define SCROLLBAR_WIDTH 8
+
+static void draw_scrollbar(int x, int y, int width, int height, int total, int visible, int first) {
+    if (total <= visible || height <= 0) return;
+    gui_fill(x, y, width, height, palette.panel_alt);
+    gui_frame(x, y, width, height, palette.border);
+    int thumb = height * visible / total;
+    if (thumb < 18) thumb = 18;
+    if (thumb > height) thumb = height;
+    int span = height - thumb;
+    int max_first = total - visible;
+    int offset = max_first > 0 ? span * first / max_first : 0;
+    if (offset < 0) offset = 0;
+    if (offset > span) offset = span;
+    gui_round(x + 1, y + offset + 1, width - 2, thumb - 2, 2, palette.accent_dim);
+}
+
+/* Primera fila que corresponde a un clic o arrastre en la pista. */
+static int scrollbar_first(int y, int height, int total, int visible, int py) {
+    int thumb = height * visible / total;
+    if (thumb < 18) thumb = 18;
+    if (thumb > height) thumb = height;
+    int span = height - thumb;
+    int max_first = total - visible;
+    int offset = py - y - thumb / 2;
+    if (offset < 0) offset = 0;
+    if (offset > span) offset = span;
+    return span > 0 ? max_first * offset / span : 0;
+}
+
+/* Lineas que ocupa el archivo abierto en el visor (al menos una). */
+static int files_viewer_lines(int node_index) {
+    const char *content = fs_nodes()[node_index].content;
+    int lines = 1;
+    for (const char *cursor = content; *cursor; cursor++) if (*cursor == '\n') lines++;
+    return lines;
+}
+
+/* Devuelve 1 si la barra es necesaria y deja su rectangulo y el estado de
+ * desplazamiento (listado o visor). */
+static int files_scrollbar_geometry(const files_layout_t *layout, int *bx, int *by, int *bw, int *bh,
+                                    int *total, int *visible, int *first) {
+    int count = files_rows(files_ids, FS_MAX_NODES);
+    int id = (files.selected >= 0 && files.selected < count) ? files_ids[files.selected] : -1;
+    *bx = layout->x + layout->width - SCROLLBAR_WIDTH;
+    *by = layout->body;
+    *bw = SCROLLBAR_WIDTH;
+    *bh = layout->body_end - layout->body;
+    if (*bh <= 0) return 0;
+    if (files.viewer && id >= 0) {
+        *total = files_viewer_lines(id);
+        *first = files.view_top;
+    } else {
+        *total = count;
+        *first = files.scroll;
+    }
+    *visible = layout->rows;
+    return *total > *visible;
+}
+
+/* --- Botones de la ventana Archivos ------------------------------------- */
+
+enum { FILES_BTN_NEW = 0, FILES_BTN_DIR, FILES_BTN_RENAME, FILES_BTN_DELETE, FILES_BTN_EDIT, FILES_BTN_COUNT };
+
+static const char *files_button_label(int index) {
+    static const char *labels[FILES_BTN_COUNT] = { "Nuevo", "Carpeta", "Renombrar", "Borrar", "Editar" };
+    return (index >= 0 && index < FILES_BTN_COUNT) ? labels[index] : "";
+}
+
+static int files_button_rect(const files_layout_t *layout, int index, int *bx, int *by, int *bw, int *bh) {
+    int cursor = layout->x, height = font_small->height + margin;
+    for (int i = 0; i < FILES_BTN_COUNT; i++) {
+        int width = gui_text_width(files_button_label(i), font_small) + margin * 3;
+        if (cursor + width > layout->x + layout->width) return 0;
+        if (i == index) {
+            *bx = cursor; *by = layout->actions + 2; *bw = width; *bh = height;
+            return 1;
+        }
+        cursor += width + margin;
+    }
+    return 0;
+}
+
+static void draw_files_actions(const files_layout_t *layout, int file_selected,
+                               int has_selection, int locked_selected, int locked_dir) {
+    mouse_state_t mouse = mouse_state();
+    for (int i = 0; i < FILES_BTN_COUNT; i++) {
+        int x, y, w, h;
+        if (!files_button_rect(layout, i, &x, &y, &w, &h)) continue;
+        int enabled = 1;
+        if (i == FILES_BTN_EDIT) enabled = file_selected;
+        else if (i == FILES_BTN_RENAME || i == FILES_BTN_DELETE) enabled = has_selection && !locked_selected;
+        else enabled = !locked_dir;
+        int hovered = enabled && hit(x, y, w, h, mouse.x, mouse.y);
+        gui_round(x, y, w, h, 4, hovered ? palette.accent_soft : palette.panel_alt);
+        gui_frame(x, y, w, h, hovered ? palette.accent : palette.border);
+        gui_text_center(x + w / 2, y + (h - font_small->height) / 2 + font_small->ascent,
+                        files_button_label(i), enabled ? palette.text : palette.text_dim, font_small);
+    }
 }
 
 /* Visor de texto: muestra el contenido del nodo desde la primera linea
  * visible, sin copiar el archivo entero en cada repintado. */
-static void draw_files_viewer(int x, int y, int width, int height, int node_index) {
+static void draw_files_viewer(int x, int y, int width, int height, int node_index, int rows) {
     const gui_font_t *small = font_small;
     const fs_node_t *nodes = fs_nodes();
     int line = files_row_height();
-    int rows = height / line;
+    (void)height;
     gui_text(x, y + small->ascent, nodes[node_index].name, palette.text, small);
     int top = y + small->height + small->line_gap + 6;
     gui_fill(x, top, width, 1, palette.border);
@@ -775,26 +989,26 @@ static void draw_files_viewer(int x, int y, int width, int height, int node_inde
     }
 }
 
-static void draw_files_content(int x, int y, int width, int height) {
+static void draw_files_content(const gui_window_t *window) {
+    files_layout_t layout;
+    files_layout(window, &layout);
     const gui_font_t *small = font_small;
-    int line = files_row_height();
+    if (layout.width <= 0 || layout.height <= 0) return;
+    int x = layout.x, width = layout.width;
     char path[FS_PATH_MAX];
     fs_get_cwd_path(path, sizeof(path));
-    gui_text(x, y + margin + small->ascent, path, palette.accent_dim, small);
-    int header = y + margin + small->height + small->line_gap + 4;
-    gui_fill(x, header, width, 1, palette.border);
-    int body = header + 6;
-    int footer = y + height - small->height - 2;
-    int rows = (footer - body - 4) / line;
-    if (rows < 1) return;
+    gui_text(x, layout.y + margin + small->ascent, path, palette.accent_dim, small);
+    gui_fill(x, layout.header, width, 1, palette.border);
 
     int count = files_rows(files_ids, FS_MAX_NODES);
     if (files.selected >= count) files.selected = count ? count - 1 : 0;
     if (files.selected < 0) files.selected = 0;
+    int rows = layout.rows;
+    int line = files_row_height();
+    int id = (files.selected < count) ? files_ids[files.selected] : -1;
 
-    if (files.viewer) {
-        if (files.selected < count && files_ids[files.selected] >= 0)
-            draw_files_viewer(x, body, width, footer - body, files_ids[files.selected]);
+    if (files.viewer && id >= 0) {
+        draw_files_viewer(x, layout.body, width - SCROLLBAR_WIDTH - 4, layout.body_end - layout.body, id, rows);
     } else {
         if (files.selected < files.scroll) files.scroll = files.selected;
         if (files.selected >= files.scroll + rows) files.scroll = files.selected - rows + 1;
@@ -803,22 +1017,36 @@ static void draw_files_content(int x, int y, int width, int height) {
         for (int row = 0; row < rows; row++) {
             int position = files.scroll + row;
             if (position >= count) break;
-            int id = files_ids[position];
-            int ry = body + row * line;
-            int is_dir = id < 0 || nodes[id].type == FS_TYPE_DIR;
+            int node = files_ids[position];
+            int ry = layout.body + row * line;
+            int is_dir = node < 0 || nodes[node].type == FS_TYPE_DIR;
+            int internal = node >= 0 && fs_is_system(node);
             if (position == files.selected)
                 gui_round(x - margin / 2, ry - 2, width + margin, line, radius / 2, palette.accent_soft);
-            gui_icon(is_dir ? GUI_ICON_FOLDER : GUI_ICON_TERMINAL, x, ry + 1, small->height - 2,
-                     is_dir ? palette.accent : palette.text_dim);
-            gui_text(x + small->height + 6, ry + small->ascent, id < 0 ? ".." : nodes[id].name,
-                     is_dir ? palette.accent_dim : palette.text, small);
-            if (id >= 0 && nodes[id].type == FS_TYPE_FILE) {
-                const char *size = text_u64(nodes[id].size);
-                gui_text(x + width - gui_text_width(size, small), ry + small->ascent, size, palette.text_dim, small);
+            gui_icon(is_dir ? GUI_ICON_FOLDER : (internal ? GUI_ICON_INFO : GUI_ICON_TERMINAL), x, ry + 1,
+                     small->height - 2,
+                     is_dir ? palette.accent : (internal ? palette.warn : palette.text_dim));
+            gui_text(x + small->height + 6, ry + small->ascent, node < 0 ? ".." : nodes[node].name,
+                     is_dir ? palette.accent_dim : (internal ? palette.warn : palette.text), small);
+            if (node >= 0 && nodes[node].type == FS_TYPE_FILE) {
+                const char *size = text_u64(nodes[node].size);
+                int size_x = x + width - SCROLLBAR_WIDTH - gui_text_width(size, small) - 4;
+                gui_text(size_x, ry + small->ascent, size, palette.text_dim, small);
+                /* RO: archivo interno que se puede leer pero no modificar. */
+                if (internal)
+                    gui_text(size_x - gui_text_width("RO", small) - margin, ry + small->ascent,
+                             "RO", palette.warn, small);
             }
         }
     }
-    gui_fill(x, footer - 4, width, 1, palette.border);
+
+    int bx, by, bw, bh, total, visible, first;
+    if (files_scrollbar_geometry(&layout, &bx, &by, &bw, &bh, &total, &visible, &first))
+        draw_scrollbar(bx, by, bw, bh, total, visible, first);
+
+    int file_selected = id >= 0 && fs_nodes()[id].type == FS_TYPE_FILE;
+    draw_files_actions(&layout, file_selected, id >= 0, id >= 0 && fs_is_system(id), fs_is_system(fs_cwd()));
+    int status_y = layout.actions + files_action_height();
     char hint[96];
     if (files.action) {
         const char *prompt = files.action == FILES_NEW_FILE ? "Nuevo archivo: " :
@@ -828,13 +1056,13 @@ static void draw_files_content(int x, int y, int width, int height) {
         for (size_t i = 0; files.input[i] && used + 1 < sizeof(hint); i++) hint[used++] = files.input[i];
         hint[used++] = '_';
         hint[used] = 0;
-        gui_text(x, footer + small->ascent, hint, palette.accent_dim, small);
+        gui_text(x, status_y + small->ascent, hint, palette.accent_dim, small);
         return;
     }
     fit_text(hint, sizeof(hint),
-             files.message[0] ? files.message : "N archivo  C carpeta  D borrar  R renombrar",
+             files.message[0] ? files.message : "Flechas mueven  ENTER abre  E edita  D borra",
              width, small);
-    gui_text(x, footer + small->ascent, hint, palette.text_dim, small);
+    gui_text(x, status_y + small->ascent, hint, palette.text_dim, small);
 }
 
 static void draw_net_content(int x, int y, int width, int height) {
@@ -923,6 +1151,114 @@ static void draw_apps_content(int x, int y, int width, int height) {
     }
 }
 
+/* --- Visor de imagenes --------------------------------------------------- */
+
+static void invalidate_window(const gui_window_t *window);
+
+static void images_invalidate(void) {
+    gui_window_t *window = window_for(WIN_IMAGES);
+    if (window) invalidate_window(window);
+}
+
+/* Cambia la imagen marcada y deja el cambio por serie: las pruebas no
+ * necesitan capturas para saber que se mostro. */
+static void images_select(int index) {
+    int count = images_count();
+    if (index < 0) index = 0;
+    if (index >= count) index = count ? count - 1 : 0;
+    images_selected = index;
+    if (count) {
+        console_write("GUI: IMAGEN ");
+        console_write(images_name(index));
+        console_write(" ");
+        console_dec((uint64_t)images_width(index));
+        console_write("x");
+        console_dec((uint64_t)images_height(index));
+        console_putc('\n');
+    }
+    images_invalidate();
+}
+
+/* Devuelve 1 si consume la tecla; ESC se deja al escritorio. */
+static int images_key(int key) {
+    if (!window_for(WIN_IMAGES)) return 0;
+    int count = images_count();
+    if (key == KB_KEY_UP && images_selected > 0) { images_select(images_selected - 1); return 1; }
+    if (key == KB_KEY_DOWN && images_selected + 1 < count) { images_select(images_selected + 1); return 1; }
+    if (key == 27) return 0;
+    return 1;
+}
+
+static int images_list_width(int width) {
+    int list = width / 3;
+    return list < 150 ? 150 : list;
+}
+
+static void draw_images_content(int x, int y, int width, int height) {
+    const gui_font_t *small = font_small;
+    int count = images_count();
+    char buffer[72];
+    gui_text(x, y + small->ascent, "Imagenes empaquetadas", palette.accent_dim, small);
+    gui_fill(x, y + small->height + 4, width, 1, palette.border);
+    int top = y + small->height + 10;
+    if (!count) {
+        gui_text(x, top + small->ascent, "Sin imagenes: copia images/*.jpg y ejecuta make iso.",
+                 palette.text_dim, small);
+        return;
+    }
+    if (images_selected < 0 || images_selected >= count) images_selected = 0;
+    int row = small->height + small->line_gap + 4;
+    int list_width = images_list_width(width);
+    for (int i = 0; i < count; i++) {
+        int line_y = top + i * row;
+        if (i == images_selected)
+            gui_round(x - margin / 2, line_y - 2, list_width + margin, row, radius / 2, palette.accent_soft);
+        gui_text(x, line_y + small->ascent, images_name(i),
+                 i == images_selected ? palette.text : palette.text_dim, small);
+        u64_text(buffer, sizeof(buffer), (uint64_t)images_width(i), 10);
+        size_t used = slen(buffer);
+        buffer[used++] = 'x';
+        u64_text(buffer + used, sizeof(buffer) - used, (uint64_t)images_height(i), 10);
+        gui_text(x + list_width - gui_text_width(buffer, small), line_y + small->ascent,
+                 buffer, palette.text_dim, small);
+    }
+    /* Vista previa: escala entera por muestreo, centrada y sin deformar. */
+    int view_x = x + list_width + margin, view_y = top;
+    int view_w = width - list_width - margin;
+    int view_h = height - (top - y) - small->height - 14;
+    if (view_w < 40 || view_h < 40) return;
+    gui_fill(view_x, view_y, view_w, view_h, palette.panel_alt);
+    gui_frame(view_x, view_y, view_w, view_h, palette.border);
+    int source_w = images_width(images_selected), source_h = images_height(images_selected);
+    if (!source_w || !source_h) return;
+    int draw_w = view_w - 8;
+    int draw_h = draw_w * source_h / source_w;
+    if (draw_h > view_h - 8) {
+        draw_h = view_h - 8;
+        draw_w = draw_h * source_w / source_h;
+    }
+    int origin_x = view_x + (view_w - draw_w) / 2;
+    int origin_y = view_y + (view_h - draw_h) / 2;
+    const uint16_t *pixels = images_data(images_selected);
+    clip_save();
+    gui_set_clip(origin_x, origin_y, draw_w, draw_h);
+    for (int line_y = 0; line_y < draw_h; line_y++) {
+        int source_y = line_y * source_h / draw_h;
+        const uint16_t *source = pixels + (size_t)source_y * (size_t)source_w;
+        uint32_t *destination = draw_target->pixels +
+            (size_t)(origin_y + line_y) * (size_t)draw_target->stride + (size_t)origin_x;
+        for (int column = 0; column < draw_w; column++)
+            destination[column] = images_rgb(source[column * source_w / draw_w]);
+    }
+    clip_restore();
+    gui_frame(origin_x - 1, origin_y - 1, draw_w + 2, draw_h + 2, palette.border);
+    /* Pie: nombre, tamano y ayuda de teclas. */
+    copystr(buffer, images_name(images_selected), sizeof(buffer));
+    gui_text(x, y + height - small->height - 2, buffer, palette.text, small);
+    gui_text(x + width - gui_text_width("Flechas cambian  ESC cierra", small),
+             y + height - small->height - 2, "Flechas cambian  ESC cierra", palette.text_dim, small);
+}
+
 static void draw_window_content(const gui_window_t *window) {
     int x = window_content_x(window) + margin;
     int y = window_content_top(window) + margin;
@@ -931,10 +1267,11 @@ static void draw_window_content(const gui_window_t *window) {
     if (width <= 0 || height <= 0) return;
     switch (window->kind) {
     case WIN_SYSTEM: draw_system_content(x, y, width, height); break;
-    case WIN_FILES: draw_files_content(x, y, width, height); break;
+    case WIN_FILES: draw_files_content(window); break;
     case WIN_NET: draw_net_content(x, y, width, height); break;
     case WIN_INPUT: draw_input_content(x, y, width, height); break;
     case WIN_APPS: draw_apps_content(x, y, width, height); break;
+    case WIN_IMAGES: draw_images_content(x, y, width, height); break;
     case WIN_APP:
         if (app_surface.pixels) {
             clip_save();
@@ -956,22 +1293,30 @@ static void draw_window_content(const gui_window_t *window) {
 
 static void draw_window(const gui_window_t *window) {
     int x = window->x, y = window->y, w = window->width, h = window->height;
+    /* Solo la ventana activa lleva el titulo y el marco en color de acento:
+     * es la pista de a donde van las teclas. */
+    int focused = (int)(window - windows) == focus_slot;
+    uint32_t title_face = focused ? palette.accent_soft : palette.panel_alt;
+    uint32_t border = focused ? palette.accent : palette.border;
     /* Sombra opaca de un pixel: mezclar la ventana entera con gui_blend, canal
-     * a canal, era el mayor coste de cada frame. */
-    gui_fill(x + margin / 2, y + margin, w, h, palette.border);
+     * a canal, era el mayor coste de cada frame. Se redondea igual que el panel
+     * para que la esquina no asome cuadrada junto al marco. */
+    gui_round(x + margin / 2, y + margin, w, h, radius, palette.border);
     gui_round(x, y, w, h, radius, palette.panel);
-    gui_round(x, y, w, title_height, radius, palette.panel_alt);
-    gui_fill(x, y + title_height - radius, w, radius, palette.panel_alt);
-    gui_fill(x, y + title_height - 1, w, 1, palette.border);
+    gui_round(x, y, w, title_height, radius, title_face);
+    gui_fill(x, y + title_height - radius, w, radius, title_face);
+    gui_fill(x, y + title_height - 1, w, 1, border);
     gui_icon(window->kind == WIN_APP ? GUI_ICON_PLAY :
              window->kind == WIN_FILES ? GUI_ICON_FOLDER :
+             window->kind == WIN_IMAGES ? GUI_ICON_IMAGE :
              window->kind == WIN_NET ? GUI_ICON_GLOBE :
              window->kind == WIN_APPS ? GUI_ICON_PLAY :
              window->kind == WIN_INPUT ? GUI_ICON_CHIP : GUI_ICON_MONITOR,
-             x + margin, y + (title_height - icon_size) / 2, icon_size, palette.accent);
+             x + margin, y + (title_height - icon_size) / 2, icon_size,
+             focused ? palette.accent_dim : palette.accent);
     gui_text(x + margin + icon_size + margin / 2,
              y + (title_height - font_body->height) / 2 + font_body->ascent,
-             window->title, palette.text, font_body);
+             window->title, focused ? palette.accent_dim : palette.text, font_body);
     int close_radius = title_height / 4 + 2;
     int close_x = x + w - margin - close_radius * 2;
     int close_y = y + (title_height - close_radius * 2) / 2;
@@ -980,17 +1325,52 @@ static void draw_window(const gui_window_t *window) {
     gui_icon(GUI_ICON_CLOSE, close_x + close_radius - cross / 2, close_y + close_radius - cross / 2,
              cross, palette.white);
     draw_window_content(window);
-    gui_frame(x, y, w, h, palette.border);
+    /* El marco sigue la silueta redondeada del panel: recto dejaba un pico en
+     * cada esquina, mas visible aun con el azul de la ventana activa. */
+    round_frame(x, y, w, h, radius, border);
 }
 
-/* Gradiente precalculado en gui_init(): por fila solo queda copiar el color
- * ya resuelto dentro del rectangulo danado. */
+/* Tablas de muestreo del wallpaper: para cada columna y fila de la pantalla se
+ * guarda la coordenada de origen. Asi el repintado solo hace dos lecturas y una
+ * conversion por pixel, sin divisiones dentro del bucle. */
+static void background_build_tables(void) {
+    wall_ready = 0;
+    wall_index = images_wallpaper();
+    if (wall_index < 0) return;
+    int width = images_width(wall_index), height = images_height(wall_index);
+    if (!width || !height || back.width <= 0 || back.height <= 0) return;
+    if (back.width > (int)(sizeof(wall_x) / sizeof(wall_x[0])) ||
+        back.height > (int)(sizeof(wall_y) / sizeof(wall_y[0]))) return;
+    for (int x = 0; x < back.width; x++) wall_x[x] = (uint16_t)(x * width / back.width);
+    for (int y = 0; y < back.height; y++) wall_y[y] = (uint16_t)(y * height / back.height);
+    wall_ready = 1;
+}
+
+/* Color del fondo en un punto: imagen escalada o degradado. */
+static uint32_t background_pixel_at(int x, int y) {
+    if (wall_ready && x >= 0 && y >= 0 && x < back.width && y < back.height) {
+        const uint16_t *source = images_data(wall_index);
+        return images_rgb(source[(size_t)wall_y[y] * (size_t)images_width(wall_index) +
+                                  (size_t)wall_x[x]]);
+    }
+    return gradient[(unsigned)(y * 255 / (back.height ? back.height : 1)) & 255u];
+}
+
+/* Fondo del rectangulo danado. Con imagen se copia el wallpaper escalado; sin
+ * imagenes empaquetadas se conserva el degradado precalculado. */
 static void draw_background_rect(int x0, int y0, int x1, int y1) {
     if (x1 > back.width) x1 = back.width;
     if (y1 > back.height) y1 = back.height;
+    const uint16_t *wall = wall_ready ? images_data(wall_index) : 0;
+    int wall_width = wall_ready ? images_width(wall_index) : 0;
     for (int row = y0; row < y1; row++) {
-        uint32_t rgb = gradient[(unsigned)(row * 255 / (back.height ? back.height : 1)) & 255u];
         uint32_t *line = back.pixels + (size_t)row * (size_t)back.stride;
+        if (wall) {
+            const uint16_t *source = wall + (size_t)wall_y[row] * (size_t)wall_width;
+            for (int column = x0; column < x1; column++) line[column] = images_rgb(source[wall_x[column]]);
+            continue;
+        }
+        uint32_t rgb = gradient[(unsigned)(row * 255 / (back.height ? back.height : 1)) & 255u];
         for (int column = x0; column < x1; column++) line[column] = rgb;
     }
 }
@@ -1097,9 +1477,11 @@ static void redraw_region(int x0, int y0, int x1, int y1) {
 
 /* Pinta en el buffer logico la union de dano pendiente; gui_present() se
  * encarga despues de volcarla al dispositivo. */
+static void report_close_cleanup(void);
 static void repaint_pending(void) {
     if (!paint_pending()) return;
     redraw_region(paint_x0, paint_y0, paint_x1, paint_y1);
+    report_close_cleanup();
 }
 
 static void desktop_draw(void) { redraw_region(0, 0, back.width, back.height); }
@@ -1115,9 +1497,72 @@ static void invalidate_window(const gui_window_t *window) {
     invalidate(window->x, window->y, window->width + margin, window->height + margin);
 }
 
+/* --- Cierre de ventanas ------------------------------------------------- */
+
+/* Cerrada la ventana hay que devolver su rectangulo al fondo: sin invalidar
+ * el area, el escritorio conserva el ultimo fotograma hasta que otra accion
+ * la repinte. El chequeo deja por serie si el area quedo limpia. */
+static char closed_title[40];
+static int close_x0, close_y0, close_x1, close_y1, close_check;
+
+static void close_window(gui_window_t *window) {
+    if (!window || !window->used) return;
+    invalidate_window(window);
+    close_x0 = window->x;
+    close_y0 = window->y;
+    close_x1 = window->x + window->width;
+    close_y1 = window->y + window->height;
+    close_check = 1;
+    copystr(closed_title, window->title, sizeof(closed_title));
+    if (window->kind == WIN_FILES) files.drag = 0;
+    window->used = 0;
+    if (dragging && &windows[drag_slot] == window) dragging = 0;
+    /* El foco no puede quedar en una ventana cerrada: hereda la de mas arriba. */
+    if (focus_slot == (int)(window - windows)) focus_topmost();
+    invalidate(0, dock_y, back.width, dock_height);
+}
+
+/* El centro de la ventana cerrada debe mostrar el fondo del escritorio; si
+ * otra ventana lo cubre se informa CUBIERTA en vez de dar un falso positivo. */
+static void report_close_cleanup(void) {
+    if (!close_check) return;
+    close_check = 0;
+    int cx = (close_x0 + close_x1) / 2, cy = (close_y0 + close_y1) / 2;
+    if (cx < 0 || cy < 0 || cx >= back.width || cy >= back.height) return;
+    int covered = 0;
+    for (int i = 0; i < GUI_WINDOW_COUNT; i++)
+        if (windows[i].used &&
+            hit(windows[i].x, windows[i].y, windows[i].width, windows[i].height, cx, cy)) covered = 1;
+    uint32_t pixel = back.pixels[(size_t)cy * (size_t)back.stride + (size_t)cx];
+    uint32_t background = background_pixel_at(cx, cy);
+    console_write("GUI: VENTANA CERRADA ");
+    console_write(closed_title);
+    if (covered) console_write(" CUBIERTA\n");
+    else if (pixel == background) console_write(" LIMPIA\n");
+    else console_write(" CON RESTOS\n");
+}
+
+/* --- Handoff del escritorio a las aplicaciones -------------------------- */
+
+static char launch_path[FS_PATH_MAX];
+
+void gui_launch_file_set(const char *path) { copystr(launch_path, path ? path : "", sizeof(launch_path)); }
+const char *gui_launch_file(void) { return launch_path; }
+void gui_launch_file_clear(void) { launch_path[0] = 0; }
+
+int gui_launch_editor(const char *path) {
+    int index = elf_find("editor.elf");
+    if (index < 0) { console_write("GUI: EDITOR NO DISPONIBLE EN LA ISO.\n"); return 0; }
+    gui_launch_file_set(path);
+    return elf_run((unsigned)index);
+}
+
 /* --- Acciones de la ventana Archivos ------------------------------------ */
 
 static gui_window_t *files_window(void) { return window_for(WIN_FILES); }
+
+/* open_window se define mas abajo, junto a toggle_window. */
+static void open_window(int kind);
 
 static void files_touch(void) {
     gui_window_t *window = files_window();
@@ -1148,6 +1593,50 @@ static void files_node_path(int id, char *out, size_t capacity) {
     copystr(out + used, fs_nodes()[id].name, capacity - used);
 }
 
+/* Compara el final del nombre con una extension, sin distinguir mayusculas. */
+static int name_ends_with(const char *name, const char *suffix) {
+    size_t name_len = slen(name), suffix_len = slen(suffix);
+    if (suffix_len > name_len) return 0;
+    const char *tail = name + name_len - suffix_len;
+    for (size_t i = 0; i < suffix_len; i++) {
+        char a = tail[i], b = suffix[i];
+        if (a >= 'A' && a <= 'Z') a = (char)(a - 'A' + 'a');
+        if (b >= 'A' && b <= 'Z') b = (char)(b - 'A' + 'a');
+        if (a != b) return 0;
+    }
+    return 1;
+}
+
+/* Los JPEG/PNG del sistema de archivos se corresponden por nombre con las
+ * imagenes empaquetadas en el blob, asi /wallpapers/wallpaper.jpg abre el
+ * wallpaper. Sin coincidencia se muestra la primera imagen. */
+static int files_image_for(const char *name) {
+    int count = images_count();
+    if (!count) return -1;
+    for (int i = 0; i < count; i++) {
+        const char *image = images_name(i);
+        size_t used = 0;
+        while (name[used] && name[used] != '.' && image[used]) {
+            char a = name[used], b = image[used];
+            if (a >= 'A' && a <= 'Z') a = (char)(a - 'A' + 'a');
+            if (b >= 'A' && b <= 'Z') b = (char)(b - 'A' + 'a');
+            if (a != b) break;
+            used++;
+        }
+        if ((!name[used] || name[used] == '.') && !image[used]) return i;
+    }
+    return 0;
+}
+
+/* Abre el visor de imagenes con la imagen que corresponde al archivo. */
+static void files_open_image(int id) {
+    int index = files_image_for(fs_nodes()[id].name);
+    if (index < 0) { files_status("Sin imagenes empaquetadas: copia images/*.jpg y recompila"); return; }
+    open_window(WIN_IMAGES);
+    images_select(index);
+    files_status("Visor de imagenes");
+}
+
 static void files_open_selected(void) {
     const fs_node_t *nodes = fs_nodes();
     int id = files_selected_node();
@@ -1163,6 +1652,10 @@ static void files_open_selected(void) {
         fs_set_cwd(id);
         files.selected = 0; files.scroll = 0; files.viewer = 0; files.view_top = 0;
         copystr(files.message, "Directorio abierto", sizeof(files.message));
+    } else if (name_ends_with(nodes[id].name, ".jpg") || name_ends_with(nodes[id].name, ".jpeg") ||
+               name_ends_with(nodes[id].name, ".png")) {
+        files_open_image(id);
+        return;
     } else {
         files.viewer = 1; files.view_top = 0;
         copystr(files.message, "Q o retroceso para volver al listado", sizeof(files.message));
@@ -1174,6 +1667,7 @@ static void files_delete(void) {
     const fs_node_t *nodes = fs_nodes();
     int id = files_selected_node();
     if (id < 0) { files_status("Selecciona un elemento para borrar"); return; }
+    if (fs_is_system(id)) { files_status("Archivo del sistema: solo lectura"); return; }
     char path[FS_PATH_MAX], error[64];
     error[0] = 0;
     files_node_path(id, path, sizeof(path));
@@ -1186,6 +1680,14 @@ static void files_delete(void) {
 }
 
 static void files_begin(int action) {
+    if (action == FILES_RENAME) {
+        int id = files_selected_node();
+        if (id < 0) { files_status("Selecciona un elemento para renombrar"); return; }
+        if (fs_is_system(id)) { files_status("Archivo del sistema: solo lectura"); return; }
+    } else if (fs_is_system(fs_cwd())) {
+        files_status("Carpeta del sistema: solo lectura");
+        return;
+    }
     files.action = action;
     files.input_len = 0;
     files.input[0] = 0;
@@ -1196,8 +1698,16 @@ static void files_commit(void) {
     char error[64], cwd_path[FS_PATH_MAX];
     error[0] = 0;
     fs_get_cwd_path(cwd_path, sizeof(cwd_path));
+    int action = files.action;
     if (!files.input_len) { files.action = FILES_NONE; files_status("Nombre vacio"); return; }
-    int action = files.action, ok = 0;
+    if (action != FILES_RENAME && fs_is_system(fs_cwd())) {
+        files.action = FILES_NONE;
+        files.input_len = 0;
+        files.input[0] = 0;
+        files_status("Carpeta del sistema: solo lectura");
+        return;
+    }
+    int ok = 0;
     if (action == FILES_NEW_FILE) ok = fs_create_file(cwd_path, files.input, "", error, sizeof(error));
     else if (action == FILES_NEW_DIR) ok = fs_mkdir(cwd_path, files.input, error, sizeof(error));
     else if (action == FILES_RENAME) {
@@ -1212,6 +1722,56 @@ static void files_commit(void) {
     files.input_len = 0;
     files.input[0] = 0;
     files_status(ok ? "Operacion completada" : (error[0] ? error : "No se pudo completar"));
+}
+
+/* Abre el archivo marcado en el editor ELF, que recibe la ruta por el handoff
+ * de host_api (launch_file). */
+static void files_edit(void) {
+    const fs_node_t *nodes = fs_nodes();
+    int id = files_selected_node();
+    if (id < 0 || nodes[id].type != FS_TYPE_FILE) { files_status("Selecciona un archivo"); return; }
+    char path[FS_PATH_MAX];
+    files_node_path(id, path, sizeof(path));
+    if (fs_is_system(id)) {
+        console_write("GUI: EDITOR SOLO LECTURA ");
+        console_write(path);
+        console_write("\n");
+        files_status("Archivo del sistema: se abre en solo lectura");
+    } else {
+        files_status("Abriendo el editor");
+    }
+    gui_launch_editor(path);
+    files_touch();
+}
+
+static void files_button_action(int index) {
+    switch (index) {
+    case FILES_BTN_NEW: files_begin(FILES_NEW_FILE); break;
+    case FILES_BTN_DIR: files_begin(FILES_NEW_DIR); break;
+    case FILES_BTN_RENAME: files_begin(FILES_RENAME); break;
+    case FILES_BTN_DELETE: files_delete(); break;
+    case FILES_BTN_EDIT: files_edit(); break;
+    default: break;
+    }
+}
+
+/* Arrastre del pulgar: el listado se desplaza y el visor tambien. */
+static void files_drag_bar(int py) {
+    gui_window_t *window = files_window();
+    if (!window || !files.drag) return;
+    files_layout_t layout;
+    files_layout(window, &layout);
+    int bx, by, bw, bh, total, visible, first;
+    if (!files_scrollbar_geometry(&layout, &bx, &by, &bw, &bh, &total, &visible, &first)) return;
+    int value = scrollbar_first(by, bh, total, visible, py);
+    if (files.drag == 2) {
+        if (value == files.view_top) return;
+        files.view_top = value;
+    } else {
+        if (value == files.scroll) return;
+        files.scroll = value;
+    }
+    files_touch();
 }
 
 /* Devuelve 1 si la ventana Archivos consume la tecla; 0 solo con ESC cuando
@@ -1271,6 +1831,7 @@ static int files_key(int key) {
     case 'c': case 'C': files_begin(FILES_NEW_DIR); return 1;
     case 'r': case 'R': files_begin(FILES_RENAME); return 1;
     case 'd': case 'D': case 'x': case 'X': files_delete(); return 1;
+    case 'e': case 'E': files_edit(); return 1;
     default:
         return 1;
     }
@@ -1293,18 +1854,19 @@ static int dock_index_at(int px, int py) {
 
 static void toggle_window(int kind) {
     gui_window_t *existing = window_for(kind);
-    if (existing) {
-        invalidate_window(existing);
-        existing->used = 0;
-        invalidate(0, dock_y, back.width, dock_height);
-        return;
-    }
+    if (existing) { close_window(existing); return; }
+    open_window(kind);
+}
+
+/* Abre (o sube si ya existe) la ventana del dock sin alternar su estado. */
+static void open_window(int kind) {
     int slot = 0;
     switch (kind) {
     case WIN_FILES: slot = SLOT_FILES; break;
     case WIN_NET: slot = SLOT_NET; break;
     case WIN_INPUT: slot = SLOT_INPUT; break;
     case WIN_APPS: slot = SLOT_APPS; break;
+    case WIN_IMAGES: slot = SLOT_IMAGES; break;
     default: slot = SLOT_SYSTEM; break;
     }
     if (windows[slot].used) { raise_window(&windows[slot]); return; }
@@ -1314,7 +1876,15 @@ static void toggle_window(int kind) {
     case WIN_FILES: copystr(windows[slot].title, "Archivos", sizeof(windows[slot].title)); break;
     case WIN_NET: copystr(windows[slot].title, "Red", sizeof(windows[slot].title)); break;
     case WIN_INPUT: copystr(windows[slot].title, "Entrada", sizeof(windows[slot].title)); break;
+    case WIN_IMAGES: copystr(windows[slot].title, "Imagenes", sizeof(windows[slot].title)); break;
     default: copystr(windows[slot].title, "Aplicaciones", sizeof(windows[slot].title)); break;
+    }
+    set_focus(slot);                           /* la recien abierta queda activa */
+    if (kind == WIN_IMAGES) {
+        console_write("GUI: VISOR IMAGENES ");
+        console_dec((uint64_t)images_count());
+        console_write(" IMAGENES\n");
+        images_select(images_selected);
     }
     invalidate_window(&windows[slot]);
     invalidate(0, dock_y, back.width, dock_height);
@@ -1337,8 +1907,15 @@ static void app_surface_release(void) {
 
 void gui_app_close(void) {
     gui_window_t *window = window_for(WIN_APP);
-    if (window) { invalidate_window(window); window->used = 0; }
+    int closed = window != 0;
+    if (window) close_window(window);
     app_surface_release();
+    /* Con GUI RUN no habra otro ciclo de eventos: el area de la app se
+     * devuelve al escritorio y se vuelca en el acto para no dejar restos. */
+    if (closed && active) {
+        repaint_pending();
+        gui_present();
+    }
 }
 
 int gui_app_window(const char *title, int width, int height) {
@@ -1370,7 +1947,9 @@ int gui_app_window(const char *title, int width, int height) {
     }
     window->used = 1;
     window->kind = WIN_APP;
-    window->width = width + 2;
+    /* El marco reserva un margen a cada lado: sin el, la superficie de la app
+     * se dibujaria en el interior y sus ultimas columnas quedarian ocultas. */
+    window->width = width + margin * 2 + 2;
     window->height = height + title_height + margin * 2 + 1;
     if (window->width > back.width - margin * 2) window->width = back.width - margin * 2;
     if (window->height > dock_y - margin * 2) window->height = dock_y - margin * 2;
@@ -1451,12 +2030,14 @@ static void handle_press(int px, int py) {
             gui_window_t *window = &windows[i];
             if (!window->used || window->z != z) continue;
             if (!hit(window->x, window->y, window->width, window->height, px, py)) continue;
-            raise_window(window);
+            /* Cerrar antes de subir la ventana evita repintar dos veces y deja
+             * el area de la ventana cerrada marcada como danada. */
             if (close_button_hit(window, px, py)) {
                 if (window->kind == WIN_APP) gui_app_close();
-                else window->used = 0;
+                else close_window(window);
                 return;
             }
+            raise_window(window);
             if (py < window->y + title_height) {
                 dragging = 1;
                 drag_slot = i;
@@ -1465,12 +2046,30 @@ static void handle_press(int px, int py) {
                 return;
             }
             if (window->kind == WIN_FILES) {
-                int row = (py - files_body_y(window)) / files_row_height();
+                files_layout_t layout;
+                files_layout(window, &layout);
+                for (int button = 0; button < FILES_BTN_COUNT; button++) {
+                    int bx, by, bw, bh;
+                    if (!files_button_rect(&layout, button, &bx, &by, &bw, &bh)) continue;
+                    if (!hit(bx, by, bw, bh, px, py)) continue;
+                    files_button_action(button);
+                    return;
+                }
+                int bx, by, bw, bh, total, visible, first;
+                if (files_scrollbar_geometry(&layout, &bx, &by, &bw, &bh, &total, &visible, &first) &&
+                    hit(bx, by, bw, bh, px, py)) {
+                    int value = scrollbar_first(by, bh, total, visible, py);
+                    if (files.viewer) files.view_top = value; else files.scroll = value;
+                    files.drag = files.viewer ? 2 : 1;
+                    files_touch();
+                    return;
+                }
+                int row = (py - layout.body) / files_row_height();
                 int count = files_rows(files_ids, FS_MAX_NODES);
                 int position = files.scroll + row;
                 if (row >= 0 && position >= 0 && position < count) {
                     if (files.selected == position && !files.viewer) files_open_selected();
-                    else { files.selected = position; files.viewer = 0; files_touch(); }
+                    else { files.selected = position; files.viewer = 0; files.view_top = 0; files_touch(); }
                 }
                 return;
             }
@@ -1480,13 +2079,23 @@ static void handle_press(int px, int py) {
                 int index = (py - y) / row;
                 if (index >= 0 && (unsigned)index < elf_count()) elf_run((unsigned)index);
             }
+            if (window->kind == WIN_IMAGES) {
+                int list_width = images_list_width(window_content_width(window) - margin * 2);
+                if (px <= window_content_x(window) + margin + list_width) {
+                    int top = window_content_top(window) + margin + font_small->height + 10;
+                    int row = font_small->height + font_small->line_gap + 4;
+                    int index = (py - top) / row;
+                    if (index >= 0 && index < images_count()) images_select(index);
+                }
+            }
             return;
         }
 }
 
-static void handle_release(void) { dragging = 0; }
+static void handle_release(void) { dragging = 0; files.drag = 0; }
 
 static void handle_drag(int px, int py) {
+    if (files.drag) { files_drag_bar(py); return; }
     if (!dragging) return;
     gui_window_t *window = &windows[drag_slot];
     if (!window->used) { dragging = 0; return; }
@@ -1530,6 +2139,9 @@ int gui_pump(gui_event_t *event) {
     }
     int special = keyboard_special();
     int key = console_read();
+    /* Las teclas solo llegan a la ventana activa: si la app perdio el foco se
+     * consumen y se descartan para que no acaben en otra ventana. */
+    if (focus_slot != (int)(window - windows)) { special = 0; key = -1; }
     if (special) {
         /* Las flechas llegan por su propia cola: la app las recibe como
          * GUI_EV_KEY con el codigo KB_KEY_*. */
@@ -1567,6 +2179,18 @@ int gui_pump(gui_event_t *event) {
     return 1;
 }
 
+/* Teclado del escritorio: solo responde la ventana activa. Con Archivos e
+ * Imagenes abiertas a la vez, una flecha mueve la seleccion de una sola.
+ * Devuelve 1 si la ventana consumio la tecla; 0 solo con ESC, que cierra la
+ * sesion grafica cuando la ventana activa no lo necesita. */
+static int active_key(int key) {
+    gui_window_t *window = focused_window();
+    if (!window) return 0;
+    if (window->kind == WIN_FILES) return files_key(key);
+    if (window->kind == WIN_IMAGES) return images_key(key);
+    return 0;
+}
+
 void gui_run(void) {
     if (!active) return;
     want_exit = 0;
@@ -1581,13 +2205,12 @@ void gui_run(void) {
         int key = console_read();
         if (special) {
             last_key = special;
-            files_key(special);
+            active_key(special);
         } else if (key >= 0) {
             last_key = key;
-            /* ESC cierra el escritorio salvo que la ventana Archivos lo use
-             * para cancelar un nombre o cerrar el visor. */
-            if (key == 27) { if (!files_key(27)) break; }
-            else files_key(key);
+            /* ESC cierra el escritorio salvo que la ventana activa lo use. */
+            if (key == 27) { if (!active_key(27)) break; }
+            else active_key(key);
         }
         mouse_state_t mouse = mouse_state();
         int moved = mouse.x != last_mouse_x || mouse.y != last_mouse_y;
@@ -1671,11 +2294,26 @@ int gui_init(struct limine_framebuffer *framebuffer) {
     back.pixels = pmm_ptr(physical);
     direct_mode = 0;
     zero(back.pixels, (size_t)bytes);
+    /* Imagenes empaquetadas: la primera hace de fondo del escritorio. */
+    images_init();
+    background_build_tables();
+    if (wall_ready) {
+        console_write("GUI: FONDO IMAGEN ");
+        console_write(images_name(wall_index));
+        console_write(" ");
+        console_dec((uint64_t)images_width(wall_index));
+        console_write("x");
+        console_dec((uint64_t)images_height(wall_index));
+        console_putc('\n');
+    } else {
+        console_write("GUI: FONDO GRADIENTE SIN IMAGENES\n");
+    }
     for (int i = 0; i < GUI_WINDOW_COUNT; i++) zero(&windows[i], sizeof(windows[i]));
     zero(&app_surface, sizeof(app_surface));
     app_physical = 0;
     app_page_count = 0;
     z_top = 0;
+    focus_slot = -1;
     dragging = 0;
     want_exit = 0;
     last_buttons = 0;
