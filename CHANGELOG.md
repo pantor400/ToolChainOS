@@ -253,4 +253,6 @@ del import. `ci.yml` instala ahora `python3-pil` junto al resto de dependencias 
 lo verifica en el paso de versiones; `build_images.py` comprueba la dependencia al
 inicio de `build()` y sale con un mensaje claro en lugar de una traza. Los pasos
 del workflow (ISO, check_elf, PMM/heap, UTF-8, planificador, py_compile y
-protocolo TC/1) se repitieron en local: todos pasan.
+protocolo TC/1) se repitieron en local: todos pasan. Las acciones suben a
+`actions/checkout@v7` y `actions/upload-artifact@v7` para salir de Node 20, que
+el runner ya solo mantiene por compatibilidad forzada a Node 24.
