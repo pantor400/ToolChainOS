@@ -394,8 +394,9 @@ Pruebas que arrancan QEMU:
 
 El workflow [`ci.yml`](.github/workflows/ci.yml) repite en GitHub Actions la
 compilación, la verificación del ELF y las pruebas de host (PMM, heap, UTF-8,
-teclado, glifos, FS y planificador), además de publicar la ISO como artefacto. El
-badge del encabezado refleja ese estado en `main`.
+teclado, glifos, FS y planificador), además de publicar la ISO como artefacto.
+Instala `python3-pil` antes de compilar porque el blob de imágenes del escritorio
+se genera en el anfitrión; el badge del encabezado refleja ese estado en `main`.
 
 Validación y empaquetado del cierre:
 

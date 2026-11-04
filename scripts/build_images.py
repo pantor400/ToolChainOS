@@ -121,6 +121,14 @@ def verify(path):
 
 
 def build(size, output):
+    # Sin Pillow no hay blob: se avisa antes de tocar ninguna imagen y se evita
+    # el traceback del import, que en CI no dice que falta la dependencia.
+    try:
+        import PIL  # noqa: F401
+    except ImportError:
+        print('ERROR: falta Pillow (python3-pil o python3-pillow); el blob no se puede generar.',
+              file=sys.stderr)
+        return 1
     files = collect()
     if not files:
         print(f'ERROR: no hay imagenes en {SOURCE}/', file=sys.stderr)

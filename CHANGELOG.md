@@ -245,3 +245,12 @@ esquina del panel redondeado. `round_frame()` recorre el mismo trazado que
 `gui_round()` y pinta por filas el tramo que la curva gana respecto a la
 anterior, de modo que el contorno (azul en la activa) sigue las esquinas y queda
 continuo; la sombra se redondea también para no asomar cuadrada por detrás.
+
+## 2026-11-04 CI con Pillow y aviso de dependencia
+El workflow falló en `Compilación y pruebas de host` al generar el blob de
+imágenes: el runner no trae Pillow y `build_images.py` terminaba con el traceback
+del import. `ci.yml` instala ahora `python3-pil` junto al resto de dependencias y
+lo verifica en el paso de versiones; `build_images.py` comprueba la dependencia al
+inicio de `build()` y sale con un mensaje claro en lugar de una traza. Los pasos
+del workflow (ISO, check_elf, PMM/heap, UTF-8, planificador, py_compile y
+protocolo TC/1) se repitieron en local: todos pasan.

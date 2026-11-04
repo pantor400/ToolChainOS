@@ -23,7 +23,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            gcc binutils nasm xorriso python3
+            gcc binutils nasm xorriso python3 python3-pil
 
       - name: Versiones
         run: |
@@ -32,6 +32,7 @@ jobs:
           nasm -v
           xorriso -version | head -1
           python3 --version
+          python3 -c 'import PIL; print("Pillow", PIL.__version__)'
 
       - name: Compilar el kernel y la ISO
         run: make iso
