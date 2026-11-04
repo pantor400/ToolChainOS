@@ -15,7 +15,13 @@ typedef struct {
     char name[32];
     int width, height;
     const uint16_t *pixels;
+    const char *extension;
 } image_entry_t;
+
+/* Codigos del ultimo u32 de cada entrada; el 0 corresponde a los blobs que se
+ * generaron antes de que el campo llevara la extension. */
+static const char *const extensions[] = { ".jpg", ".jpg", ".jpeg", ".png" };
+#define EXTENSION_COUNT ((int)(sizeof(extensions) / sizeof(extensions[0])))
 
 static image_entry_t entries[IMAGES_MAX];
 static int count;
@@ -71,6 +77,8 @@ void images_init(void) {
         entries[i].width = (int)read_u16(entry + 32);
         entries[i].height = (int)read_u16(entry + 34);
         entries[i].pixels = (const uint16_t *)(start + read_u32(entry + 36));
+        uint32_t extension = read_u32(entry + 44);
+        entries[i].extension = extensions[extension < (uint32_t)EXTENSION_COUNT ? extension : 0];
         count++;
     }
 }
@@ -79,6 +87,10 @@ int images_count(void) { return count; }
 
 const char *images_name(int index) {
     return (index >= 0 && index < count) ? entries[index].name : "";
+}
+
+const char *images_extension(int index) {
+    return (index >= 0 && index < count) ? entries[index].extension : "";
 }
 
 int images_width(int index) { return (index >= 0 && index < count) ? entries[index].width : 0; }

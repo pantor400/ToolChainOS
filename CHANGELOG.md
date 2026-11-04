@@ -423,3 +423,45 @@ sector, LUKS, solo lectura y ausencia de dispositivos, y
 `scripts/test_secureboot.py` demuestra con OVMF que la ISO sin Secure Boot
 arranca y que con Secure Boot el cargador sin firmar se rechaza. Verificado:
 `make iso`, `make test-usb` y `make test-secureboot`.
+
+## 2026-11-04 Puntero: paquetes PS/2 sin perdida, seguimiento y sin rastro
+El puntero de la GUI se desenfocaba y se quedaba atras al mover rapido. Habia
+tres causas. Primera: `interrupts_init()` enmascaraba la cascada IRQ2 del PIC
+maestro, de modo que la IRQ12 del raton nunca llegaba al procesador y todo
+dependia del sondeo del bucle, que solo corre al despertar del `hlt`. Segunda:
+`keyboard_read()` leia el byte del i8042 y, si era del raton, lo tiraba; eso
+rompia el paquete de 3 bytes y movia el puntero a una posicion falsa. Tercera:
+`mouse_poll()` y `mouse_irq()` compartian `packet_index` sin exclusion, y
+`mouse_state()` podia mezclar una X nueva con una Y vieja.
+Ahora la cascada IRQ2 queda abierta (la IRQ1 del teclado sigue enmascarada y el
+teclado se sondea como antes), `mouse_init()` configura con las interrupciones
+cerradas para no perder el ACK 0xFA, `mouse_poll()` drena con `cli`/`sti`,
+`mouse_irq()` vacia el controlador en cada interrupcion, `mouse_state()` toma
+una instantanea coherente y `keyboard_read()` reparte los bytes del raton por
+`mouse_poll()` en vez de descartarlos. Los paquetes con desbordamiento ya no
+anulan el movimiento. En la GUI, `gui_present()` repone el fondo del cursor
+tambien en el volcado directo, no redibuja si nada cambio y `gui_shutdown()`
+publica `GUI: PUNTERO X= Y= PAQUETES= DESCARTES=` como traza de prueba.
+Nuevo `make test-raton` (`scripts/test_raton.py`): inyecta rafagas relativas por
+QMP, exige la posicion final exacta, cero bytes descartados y compara recortes
+PPM antes y despues del paso del cursor para descartar estelas. Verificado:
+`make iso`, `make test-raton` y `make test-gui` completos.
+
+## 2026-11-04 Arbol con contenido real y galeria de imagenes en el explorador
+El sistema arrancaba con pocos archivos y el catalogo de imagenes vivia solo en
+el blob incrustado: la ventana Imagenes mostraba las tres imagenes del proyecto,
+pero en el explorador solo existia `/wallpapers/wallpaper.jpg`. Cada archivo
+tiene ahora su razon de ser y su ubicacion visible.
+El blob guarda en el ultimo `u32` de cada entrada la extension de origen (1 jpg,
+2 jpeg, 3 png), que `images_extension()` expone al kernel. `fs_seed_gallery()`
+recorre ese catalogo al arrancar y publica en `/wallpapers` una ficha por imagen
+con el nombre real del archivo (`wallpaper.jpg`, `Logo.jpg`, `Wallpaper0.jpg`),
+sus dimensiones y los bytes RGB565 medidos; las fichas son nodos del sistema, se
+rehacen en cada arranque y no se pueden borrar. Se anade `/docs` con LEEME,
+COMANDOS, GUI y ARCHIVOS, se corrige `/etc/fstab` para que no declare un `/tmp`
+que no existia y el mensaje del dia invita a `LS /docs`.
+En la GUI, la linea de estado del explorador muestra la ruta absoluta del
+elemento marcado y el pie del visor muestra `/wallpapers/<imagen>`; abrir un
+archivo con extension de imagen que no este empaquetado avisa en vez de mostrar
+otra imagen. Verificado: `make iso`, `make test-files` (46 comprobaciones) y
+`make test-gui` completos.

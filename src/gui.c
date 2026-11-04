@@ -56,7 +56,7 @@ static gui_surface_t *draw_target;
 static gui_theme_t palette;
 static const gui_font_t *font_small, *font_body, *font_title;
 static int clip_x, clip_y, clip_w, clip_h;
-static int active, direct_mode, want_exit;
+static int active, want_exit;
 static gui_window_t windows[GUI_WINDOW_COUNT];
 static int z_top;
 /* Ventana activa: es la unica que recibe el teclado y la que se resalta en el
@@ -565,14 +565,15 @@ static void cursor_restore(void) {
 
 void gui_present(void) {
     if (!active || !device) return;
-    if (direct_mode) {
-        draw_cursor_on_device(last_mouse_x, last_mouse_y);
-        cursor_drawn_x = last_mouse_x;
-        cursor_drawn_y = last_mouse_y;
-        return;
-    }
+    int pending = paint_pending();
+    /* Sin dano y con el puntero quieto no hay nada que volcar: redibujarlo
+     * sobre si mismo solo gasta tiempo de framebuffer y parpadea. */
+    if (!pending && last_mouse_x == cursor_drawn_x && last_mouse_y == cursor_drawn_y) return;
+    /* El cursor vive solo en el dispositivo: se repone siempre el fondo de su
+     * posicion anterior antes de pintarlo en la nueva, incluso si el volcado
+     * es directo. Sin esto queda un rastro del puntero viejo. */
     cursor_restore();
-    if (paint_pending()) {
+    if (pending) {
         flush_region(paint_x0, paint_y0, paint_x1, paint_y1);
         paint_clear();
     }
@@ -964,6 +965,9 @@ static void draw_files_actions(const files_layout_t *layout, int file_selected,
     }
 }
 
+/* Ruta absoluta del nodo marcado; se define junto a las acciones, mas abajo. */
+static void files_node_path(int id, char *out, size_t capacity);
+
 /* Visor de texto: muestra el contenido del nodo desde la primera linea
  * visible, sin copiar el archivo entero en cada repintado. */
 static void draw_files_viewer(int x, int y, int width, int height, int node_index, int rows) {
@@ -1056,6 +1060,15 @@ static void draw_files_content(const gui_window_t *window) {
         for (size_t i = 0; files.input[i] && used + 1 < sizeof(hint); i++) hint[used++] = files.input[i];
         hint[used++] = '_';
         hint[used] = 0;
+        gui_text(x, status_y + small->ascent, hint, palette.accent_dim, small);
+        return;
+    }
+    /* Sin mensaje se muestra la ruta absoluta del elemento marcado: cada fila
+     * del explorador dice donde vive dentro del sistema. */
+    if (!files.message[0] && id >= 0) {
+        char location[FS_PATH_MAX];
+        files_node_path(id, location, sizeof(location));
+        fit_text(hint, sizeof(hint), location, width, small);
         gui_text(x, status_y + small->ascent, hint, palette.accent_dim, small);
         return;
     }
@@ -1252,9 +1265,16 @@ static void draw_images_content(int x, int y, int width, int height) {
     }
     clip_restore();
     gui_frame(origin_x - 1, origin_y - 1, draw_w + 2, draw_h + 2, palette.border);
-    /* Pie: nombre, tamano y ayuda de teclas. */
-    copystr(buffer, images_name(images_selected), sizeof(buffer));
-    gui_text(x, y + height - small->height - 2, buffer, palette.text, small);
+    /* Pie: ruta real del archivo dentro del sistema y ayuda de teclas. Cada
+     * imagen del blob tiene su ficha en /wallpapers, asi el visor y el
+     * explorador hablan del mismo archivo. */
+    char location[96];
+    copystr(location, "/wallpapers/", sizeof(location));
+    size_t used = slen(location);
+    copystr(location + used, images_name(images_selected), sizeof(location) - used);
+    used = slen(location);
+    copystr(location + used, images_extension(images_selected), sizeof(location) - used);
+    gui_text(x, y + height - small->height - 2, location, palette.accent_dim, small);
     gui_text(x + width - gui_text_width("Flechas cambian  ESC cierra", small),
              y + height - small->height - 2, "Flechas cambian  ESC cierra", palette.text_dim, small);
 }
@@ -1608,11 +1628,11 @@ static int name_ends_with(const char *name, const char *suffix) {
 }
 
 /* Los JPEG/PNG del sistema de archivos se corresponden por nombre con las
- * imagenes empaquetadas en el blob, asi /wallpapers/wallpaper.jpg abre el
- * wallpaper. Sin coincidencia se muestra la primera imagen. */
+ * imagenes empaquetadas en el blob, asi /wallpapers/Logo.jpg abre Logo. Si el
+ * nombre no esta en el blob se avisa en vez de mostrar otra imagen: un archivo
+ * con extension de imagen pero sin pixeles detras seria un enganno. */
 static int files_image_for(const char *name) {
     int count = images_count();
-    if (!count) return -1;
     for (int i = 0; i < count; i++) {
         const char *image = images_name(i);
         size_t used = 0;
@@ -1625,13 +1645,16 @@ static int files_image_for(const char *name) {
         }
         if ((!name[used] || name[used] == '.') && !image[used]) return i;
     }
-    return 0;
+    return -1;
 }
 
 /* Abre el visor de imagenes con la imagen que corresponde al archivo. */
 static void files_open_image(int id) {
     int index = files_image_for(fs_nodes()[id].name);
-    if (index < 0) { files_status("Sin imagenes empaquetadas: copia images/*.jpg y recompila"); return; }
+    if (index < 0) {
+        files_status("Esta imagen no esta empaquetada: anadela en images/ y ejecuta make iso");
+        return;
+    }
     open_window(WIN_IMAGES);
     images_select(index);
     files_status("Visor de imagenes");
@@ -2292,7 +2315,6 @@ int gui_init(struct limine_framebuffer *framebuffer) {
         return 0;
     }
     back.pixels = pmm_ptr(physical);
-    direct_mode = 0;
     zero(back.pixels, (size_t)bytes);
     /* Imagenes empaquetadas: la primera hace de fondo del escritorio. */
     images_init();
@@ -2342,4 +2364,12 @@ void gui_shutdown(void) {
     console_suspend_screen(0);
     console_clear();
     console_write("GUI: SESION FINALIZADA; CONSOLA RESTAURADA.\n");
+    /* Traza para las pruebas: la posicion final del puntero debe ser la suma
+     * exacta de los movimientos inyectados y DESCARTES no debe crecer. */
+    mouse_state_t pointer = mouse_state();
+    console_write("GUI: PUNTERO X="); console_dec((uint64_t)pointer.x);
+    console_write(" Y="); console_dec((uint64_t)pointer.y);
+    console_write(" PAQUETES="); console_dec((uint64_t)pointer.packets);
+    console_write(" DESCARTES="); console_dec((uint64_t)pointer.discards);
+    console_putc('\n');
 }

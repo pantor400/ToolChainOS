@@ -1,6 +1,6 @@
 #include "keyboard.h"
 #include "utf8.h"
-#include "io.h"
+#include "mouse.h"
 static unsigned layout=KEYBOARD_ES,shift_l,shift_r,caps,caps_down,extended,pause_bytes,altgr;
 static uint32_t dead;
 /* Cola de 16 bytes: un escalar UTF-8 de 4 bytes siempre cabe completo. */
@@ -113,7 +113,9 @@ void keyboard_scancode(uint8_t scan){
 }
 int keyboard_read(void){
     int byte=keyboard_next_byte();if(byte>=0)return byte;
-    uint8_t status=inb(0x64);if(!(status&1))return -1;
-    uint8_t scan=inb(0x60);if(status&0x20)return -1;
-    keyboard_scancode(scan);return keyboard_next_byte();
+    /* El i8042 entrega teclado y raton por el mismo puerto. Antes se leia el
+     * byte y, si era del raton, se tiraba: eso rompia el paquete de 3 bytes y
+     * el puntero saltaba. mouse_poll() drena y reparte cada byte. */
+    mouse_poll();
+    return keyboard_next_byte();
 }

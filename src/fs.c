@@ -1,5 +1,6 @@
 #include "fs.h"
 #include "console.h"
+#include "images.h"
 #include "util.h"
 
 static fs_node_t nodes[FS_MAX_NODES];
@@ -170,19 +171,25 @@ int fs_import(const fs_node_t *in){
  * snapshot manipulado no pueda alterar los datos del sistema. */
 typedef struct { const char *path; const char *content; } system_seed_t;
 static const system_seed_t system_seeds[] = {
+    /* Documentacion que el sistema lleva dentro: se lee en la ventana Archivos
+     * o con OPEN, y explica el resto del arbol para que nada sea un misterio. */
+    {"/docs", 0},
+    {"/docs/LEEME.txt", "ToolchainOS 3.1\n\nTodo lo que hay en /docs se siembra en cada arranque y no se\npuede modificar: es la documentacion del propio sistema.\n\n  COMANDOS.txt  ordenes de la consola\n  GUI.txt       escritorio, ventanas y teclas\n  ARCHIVOS.txt  como esta organizado el sistema de archivos\n\nLos archivos se guardan en RAM y, si hay un disco autorizado, en\nun snapshot persistente entre reinicios (ver FSSTATUS).\n"},
+    {"/docs/COMANDOS.txt", "COMANDOS DE CONSOLA\n\n  ls | dir [ruta]     lista una carpeta\n  tree [ruta]         dibuja el arbol completo\n  cd [ruta] | pwd     cambia y muestra el directorio actual\n  mkdir [ruta]        crea una carpeta\n  crear [ruta texto]  crea un archivo (alias touch)\n  open [archivo]      muestra el contenido\n  edit [archivo]      abre el editor ELF\n  rm | rmdir | ren    borra y renombra\n  copy origen destino copia sin sobrescribir\n  fsstatus            RAM o disco persistente\n  gui                 abre el escritorio grafico\n  ayuda | help        esta relacion\n\nAtajos: las rutas admiten / y .. como en cualquier sistema.\n"},
+    {"/docs/GUI.txt", "ESCRITORIO GRAFICO\n\nDock inferior: Sistema, Archivos, Red, Entrada, Imagenes,\nApps y Salir. El primer clic abre la ventana; el segundo la\ncierra y el clic en el titulo la trae al frente.\n\nArchivos\n  ENTER  entra en la carpeta o abre el archivo\n  E      abre el editor con el archivo marcado\n  D      borra   Q vuelve del visor de texto\n  La ultima linea muestra la ruta completa del elemento.\n\nImagenes\n  Flechas cambian de imagen; ESC cierra la ventana.\n  El pie indica la ruta del archivo en /wallpapers.\n"},
+    {"/docs/ARCHIVOS.txt", "SISTEMA DE ARCHIVOS\n\nLimites de esta version: 64 nodos, nombres de hasta 31\ncaracteres, archivos de 1023 bytes y rutas de 127.\n\nArbol de arranque:\n  /etc     configuracion del sistema (solo lectura)\n  /boot    limine.conf con el arranque (solo lectura)\n  /proc    informacion del kernel (solo lectura)\n  /docs    esta documentacion (solo lectura)\n  /wallpapers  una ficha por cada imagen empaquetada\n  /nota y /script  ejemplos editables\n\nLas carpetas marcadas RO no admiten escritura, borrado ni\nrenombrado; el resto es libre y se conserva si el disco esta\nautorizado.\n"},
     {"/etc", 0},
-    {"/etc/motd", "Bienvenido a ToolchainOS.\nSistema operativo didactico de 64 bits.\nConsola, red, GUI y aplicaciones ELF.\n"},
+    {"/etc/motd", "Bienvenido a ToolchainOS.\nSistema operativo didactico de 64 bits.\nConsola, red, GUI y aplicaciones ELF.\nEscribe LS /docs para ver la documentacion.\n"},
     {"/etc/os-release", "NAME=ToolchainOS\nVERSION=3.1\nID=toolchainos\nPRETTY_NAME=ToolchainOS 3.1\n"},
     {"/etc/hostname", "toolchainos\n"},
-    {"/etc/fstab", "# origen  destino  tipo  opciones\n/dev/sda /       ata   ro\nramfs    /tmp    ram   rw\n"},
+    {"/etc/fstab", "# origen   destino  tipo  opciones\n/dev/sda   /        ata   rw,snapshots\n# /etc, /boot, /proc, /docs y /wallpapers son de solo lectura.\n"},
     {"/boot", 0},
     {"/boot/limine.conf", "timeout: 0\n/Toolchain OS - 64 bits\n    protocol: limine\n    path: boot():/boot/kernel.elf\n    resolution: 1280x720x32\n    module_path: boot():/boot/apps/editor.elf\n    module_path: boot():/boot/apps/terminal.elf\n"},
     {"/proc", 0},
     {"/proc/version", "ToolchainOS 3.1 (x86_64) kernel propio sin libc\n"},
     {"/proc/cpuinfo", "vendor_id: ToolchainOS\ncpu family: x86_64\nflags: paging apic pit ps2 ata\n"},
     {"/wallpapers", 0},
-    {"/wallpapers/wallpaper.jpg", "Imagen del escritorio de ToolchainOS.\nSe empaqueta desde images/wallpaper.jpg al compilar.\nArchivo del sistema: solo lectura.\n"},
-    {"/wallpapers/LEEME", "Para cambiar el fondo copia tu imagen en images/wallpaper.jpg\ny ejecuta make iso. El build la convierte a RGB565 y la\nincrusta en el kernel.\n"},
+    {"/wallpapers/LEEME", "Cada imagen empaquetada tiene aqui su ficha con el mismo\nnombre que el archivo de images/ (wallpaper.jpg, Logo.jpg...).\nENTER sobre ella abre el visor de imagenes.\n\nPara cambiar el fondo sustituye images/wallpaper.jpg y ejecuta\nmake iso: el build la convierte a RGB565 y la incrusta en el\nkernel.\n"},
 };
 #define SYSTEM_SEEDS ((int)(sizeof(system_seeds) / sizeof(system_seeds[0])))
 
@@ -206,12 +213,88 @@ static void seed_one(const system_seed_t *seed){
     if(index > 0) system_nodes[index] = 1;
 }
 
+/* --- Galeria de imagenes empaquetadas ----------------------------------- */
+
+/* Copia texto al final del buffer y devuelve la posicion libre. */
+static size_t append_text(char *out, size_t used, size_t cap, const char *text) {
+    while (text && *text && used + 1 < cap) out[used++] = *text++;
+    return used;
+}
+
+/* Decimal sin libc: console_dec escribe en consola, no en memoria. */
+static size_t append_decimal(char *out, size_t used, size_t cap, uint64_t value) {
+    char digits[20];
+    size_t count = 0;
+    do { digits[count++] = (char)('0' + (value % 10u)); value /= 10u; } while (value);
+    while (count && used + 1 < cap) out[used++] = digits[--count];
+    return used;
+}
+
+/* Cada imagen del blob se publica en /wallpapers con el nombre del archivo de
+ * origen (wallpaper.jpg, Logo.jpg...). El explorador y el visor muestran asi el
+ * mismo catalogo, cada imagen tiene su ruta y ninguna ficha es inventada: el
+ * contenido sale de las dimensiones reales del blob. */
+static void fs_seed_gallery(void) {
+    images_init();
+    int total = images_count(), published = 0;
+    for (int i = 0; i < total; i++) {
+        const char *base = images_name(i);
+        const char *extension = images_extension(i);
+        size_t base_len = slen(base), extension_len = slen(extension);
+        if (!base_len || extension_len + 1 >= FS_NAME_MAX) continue;
+        if (base_len + extension_len >= FS_NAME_MAX) base_len = FS_NAME_MAX - 1 - extension_len;
+        char name[FS_NAME_MAX];
+        size_t used = 0;
+        for (size_t j = 0; j < base_len; j++) name[used++] = base[j];
+        for (size_t j = 0; j < extension_len; j++) name[used++] = extension[j];
+        name[used] = 0;
+        char path[FS_PATH_MAX], text[FS_FILE_MAX_SIZE];
+        copystr(path, "/wallpapers/", sizeof(path));
+        copystr(path + slen(path), name, sizeof(path) - slen(path));
+        int width = images_width(i), height = images_height(i);
+        used = 0;
+        used = append_text(text, used, sizeof(text), "Imagen empaquetada: ");
+        used = append_text(text, used, sizeof(text), base);
+        used = append_text(text, used, sizeof(text), "\nResolucion: ");
+        used = append_decimal(text, used, sizeof(text), (uint64_t)width);
+        used = append_text(text, used, sizeof(text), "x");
+        used = append_decimal(text, used, sizeof(text), (uint64_t)height);
+        used = append_text(text, used, sizeof(text), " pixeles (");
+        used = append_decimal(text, used, sizeof(text), (uint64_t)width * (uint64_t)height * 2u);
+        used = append_text(text, used, sizeof(text), " bytes RGB565)\nOrigen: images/");
+        used = append_text(text, used, sizeof(text), base);
+        used = append_text(text, used, sizeof(text), extension);
+        used = append_text(text, used, sizeof(text),
+                           "\nUso: fondo del escritorio y visor de la aplicacion Imagenes.\n"
+                           "Para cambiarla sustituye ese archivo y ejecuta make iso.\n"
+                           "Archivo del sistema: solo lectura.\n");
+        text[used] = 0;
+        int index = fs_find_node(path);
+        if (index >= 0) {
+            if (nodes[index].type != FS_TYPE_FILE) continue;
+            copystr(nodes[index].content, text, FS_FILE_MAX_SIZE);
+            nodes[index].size = (uint32_t)slen(text);
+        } else {
+            char error[48];
+            if (!fs_create_file("/wallpapers", name, text, error, sizeof(error))) continue;
+            index = fs_find_node(path);
+        }
+        if (index > 0) { system_nodes[index] = 1; published++; }
+    }
+    if (total) {
+        console_write("FS: GALERIA /wallpapers IMAGENES=");
+        console_dec((uint64_t)published);
+        console_putc('\n');
+    }
+}
+
 /* Crea los nodos internos que falten y vuelve a marcarlos todos: los snapshots
  * no guardan la marca, solo el arbol, asi que hay que restaurarla al importar. */
 static void fs_seed_system(void){
     if(seeding) return;
     seeding = 1;
     for(int i = 0; i < SYSTEM_SEEDS; i++) seed_one(&system_seeds[i]);
+    fs_seed_gallery();
     seeding = 0;
     console_write("FS: ARCHIVOS DEL SISTEMA EN SOLO LECTURA\n");
 }

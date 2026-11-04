@@ -18,6 +18,14 @@ with Guest('files-editor') as g:
     run('mkdir '+('z'*32),'ERROR:')
     run('open '+('z'*128),'ARCHIVO NO ENCONTRADO')
     run('tree /','three','one')
+    # Arbol de arranque: documentacion propia y una ficha por cada imagen
+    # empaquetada, con el mismo nombre que el archivo de images/.
+    run('ls docs','COMANDOS.txt','ARCHIVOS.txt')
+    run('open docs/ARCHIVOS.txt','SISTEMA DE ARCHIVOS')
+    run('ls wallpapers','wallpaper.jpg','Logo.jpg')
+    run('open wallpapers/Logo.jpg','Imagen empaquetada: Logo','Resolucion: 1200x1200')
+    run('rm wallpapers/Logo.jpg','SOLO LECTURA')
+    run('tree /','docs','wallpapers')
     run('rm a/three','OPERACION OK')
     run('rm a/one','OPERACION OK')
     run('rmdir a','OPERACION OK')

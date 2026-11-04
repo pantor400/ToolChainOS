@@ -11,6 +11,10 @@
 void images_init(void);
 int images_count(void);
 const char *images_name(int index);
+/* Extension de origen de la imagen (".jpg", ".jpeg", ".png"). El sistema de
+ * archivos la usa para publicarla en /wallpapers con el mismo nombre que el
+ * archivo del proyecto; un blob antiguo sin el campo se trata como JPEG. */
+const char *images_extension(int index);
 int images_width(int index);
 int images_height(int index);
 /* Pixeles RGB565 fila a fila de una imagen valida; NULL si el indice no lo es. */

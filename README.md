@@ -27,7 +27,7 @@ Arranca en BIOS y UEFI desde una ISO híbrida y se ejecuta en QEMU.
 | **Ejecutar tareas concurrentes** | 16 PCB/TCB, pilas de 16 KiB con canario y Round Robin cooperativo con contexto en NASM |
 | **Hablar UTF-8 de verdad** | Validación estricta, teclado ES-LATAM/US con teclas muertas y glifos españoles en framebuffer |
 | **Trabajar en un escritorio** | GUI de tema claro a 1280x720 (por defecto, con la ventana de QEMU a escala 1:1) o a 1920x1080/1280x800 con `RES`, con ventanas, dock, arrastre, repintado por zonas, puntero PS/2 sin retardo y reloj local en la barra. La ventana activa lleva el título y el marco en azul y es la única que recibe el teclado |
-| **Consultar el sistema y los archivos** | Ventana Sistema con CPU, núcleos, RAM, heap, tareas, red, ratón y uptime; ventana Archivos con navegación, apertura, creación, borrado y renombrado, y los archivos internos del sistema (`/etc`, `/boot`, `/proc`, `/wallpapers`) visibles pero bloqueados en solo lectura |
+| **Consultar el sistema y los archivos** | Ventana Sistema con CPU, núcleos, RAM, heap, tareas, red, ratón y uptime; ventana Archivos con navegación, apertura, creación, borrado y renombrado, los archivos internos del sistema (`/etc`, `/boot`, `/proc`, `/docs`, `/wallpapers`) visibles pero bloqueados en solo lectura, y la ruta completa del elemento marcado en la última línea |
 | **Poner tu propio fondo y ver imágenes** | El escritorio usa `images/wallpaper.jpg` como fondo (recortado y escalado en el build); la ventana Imágenes muestra la vista previa de todas las imágenes empaquetadas |
 | **Conectar la máquina a la red** | Driver PCI RTL8139 con MAC, ARP, ping ICMP y DNS por UDP sobre la red de usuario de QEMU (IP fija 10.0.2.15/24) |
 | **Cargar programas propios** | Cargador ELF64 de PIE estáticos con `host_api_t` v5 (editor, terminal y hoja de cálculo incluidos en `apps/`), con `is_system` para respetar los archivos internos |
@@ -199,16 +199,30 @@ El árbol incluye archivos internos que el sistema vuelve a sembrar en cada arra
 
 | Ruta | Contenido |
 |---|---|
-| `/etc/motd`, `/etc/os-release`, `/etc/hostname`, `/etc/fstab` | Mensaje del día, identidad del sistema y tabla de montajes didáctica |
+| `/etc/motd`, `/etc/os-release`, `/etc/hostname`, `/etc/fstab` | Mensaje del día, identidad del sistema y tabla de montajes real |
 | `/boot/limine.conf` | Configuración del cargador con la resolución solicitada |
 | `/proc/version`, `/proc/cpuinfo` | Versión del kernel y rasgos de la CPU detectados |
-| `/wallpapers/wallpaper.jpg` | Imagen que el escritorio usa como fondo (la genera `make images`) |
+| `/docs/LEEME.txt`, `/docs/COMANDOS.txt`, `/docs/GUI.txt`, `/docs/ARCHIVOS.txt` | Documentación del propio sistema: órdenes de la consola, teclas del escritorio y organización del árbol |
+| `/wallpapers/<imagen>` | Una ficha por cada imagen empaquetada, con el mismo nombre que el archivo de `images/` (`wallpaper.jpg`, `Logo.jpg`, `Wallpaper0.jpg`) |
 
 Estos nodos se pueden leer (`LS /etc`, `OPEN /etc/motd`, `GUI EDIT /etc/motd`), pero
 `RM`, `REN`, `COPY` y la escritura desde las apps los rechazan con
 `ARCHIVO DEL SISTEMA: SOLO LECTURA`; el editor y la ventana Archivos los marcan y
 deshabilitan los botones de borrado y renombrado. Copia su contenido a otro archivo
 si necesitas modificarlo.
+
+#### La galería de `/wallpapers` sale del propio blob
+
+`images/` es la única fuente de verdad de las imágenes: `scripts/build_images.py`
+convierte cada JPEG/PNG a RGB565 y guarda en el blob su nombre, sus dimensiones y
+su extensión. Al arrancar, `fs_seed_gallery()` recorre ese catálogo y publica en
+`/wallpapers` una ficha por imagen con el nombre real del archivo de origen y sus
+datos medidos. De ahí sale la coherencia que se ve en pantalla: la ventana
+Imágenes y el explorador enumeran exactamente las mismas imágenes, `ENTRAR` sobre
+una ficha abre el visor con esa imagen, y el pie del visor y la línea de estado
+del explorador muestran la ruta (`/wallpapers/Logo.jpg`). Un archivo con extensión
+de imagen que no esté en el blob ya no abre una imagen cualquiera: se avisa de que
+no está empaquetada.
 
 ### Memoria, interrupciones y tareas
 
@@ -438,6 +452,7 @@ Pruebas que arrancan QEMU:
 | `make test-utf8-persistence` | UTF-8 persistido entre arranques |
 | `make test-scheduler` | Round Robin y recuperación de tareas |
 | `make test-gui` | GUI, fondo por imagen, visor de imágenes, reloj del CMOS, repintado por zonas, ratón por IRQ12, RTL8139 con ICMP/DNS, ventanas Sistema/Archivos, archivos internos de solo lectura, apps editor/terminal, hoja de cálculo (fórmula, edición y guardado en CSV), ventana activa y aislamiento del teclado entre ventanas |
+| `make test-raton` | Puntero: ráfaga de movimientos relativos con posición final exacta, sin bytes descartados y sin rastro del cursor en las capturas PPM |
 | `make test-uefi` | Arranque UEFI con OVMF |
 | `make test-usb` | USB completo: xHCI, BOT/SCSI, FAT32 con listar/ver/importar, escritura y persistencia de un sector, aviso LUKS, medio de solo lectura y arranque desde el propio pendrive por BIOS y UEFI |
 | `make test-secureboot` | Secure Boot: arranque de control con OVMF, rechazo del cargador sin firmar y comprobación de la firma propia |
@@ -470,7 +485,11 @@ python3 scripts/package_etapas56.py       # ZIP de entrega y verificación de pr
   con `hlt` cuando no hay eventos, de modo que un anfitrión sin KVM sigue siendo
   usable.
 - El ratón es PS/2 relativo: un touchpad funciona en modo compatibilidad, sin
-  driver Synaptics/Elan absoluto, y no hay rueda ni doble puntero.
+  driver Synaptics/Elan absoluto, y no hay rueda ni doble puntero. La IRQ12 llega
+  por la cascada del PIC y se drena junto al teclado con las interrupciones
+  cerradas, así que no se pierden paquetes ni quedan estelas del cursor. Un
+  desplazamiento que desborde el paquete de 3 bytes (más de ±255 cuentas en
+  10 ms) se aplica con la parte que trae el byte, sin detener el puntero.
 - La red llega a Ethernet + ARP + IPv4 (ICMP y DNS por UDP) con IP fija
   10.0.2.15/24: no hay TCP/IP, DHCP ni IPv6, y el RTL8139 se atiende por sondeo,
   no por IRQ. Sin TCP no se puede abrir una página web ni ejecutar clientes que
@@ -573,7 +592,7 @@ OS> linux uname -m
 x86_64
 LINUX: FIN CODIGO=0 SYSCALLS=7
 OS> linux ls /
-boot        etc         nota        proc        script      wallpapers
+boot        docs        etc         nota        proc        script      wallpapers
 ```
 
 ### Cómo se ejecuta un binario Linux
@@ -608,7 +627,7 @@ porque el usuario pidió el listado, no un informe:
 
 ```text
 OS> ls /
-boot        etc         nota        proc        script      wallpapers
+boot        docs        etc         nota        proc        script      wallpapers
 OS> open /etc/hostname
 toolchainos
 OS> grep toolchainos /etc/hostname

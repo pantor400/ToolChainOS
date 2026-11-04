@@ -194,9 +194,12 @@ test-ai-utf8: iso
 	python3 scripts/test_ai_utf8.py
 
 # Avance academico E56 sobre V3.1
-.PHONY: test-gui test-memory-host test-scheduler
+.PHONY: test-gui test-raton test-memory-host test-scheduler
 test-gui: iso
 	python3 scripts/test_gui.py
+# Puntero: rafaga de movimiento exacta y sin rastro por captura PPM.
+test-raton: iso
+	python3 scripts/test_raton.py
 
 test-memory-host: | $(BUILD)
 	$(HOST_CC) -std=c11 -g -Wall -Wextra -Werror $(SANFLAGS) -Iinclude -Ivendor/limine scripts/test_memory_host.c src/pmm.c src/heap.c -o $(BUILD)/test-memory-host

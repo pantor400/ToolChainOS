@@ -17,6 +17,7 @@ steps=[
  ('files-editor',[['python3','scripts/test_files_editor.py']],['qemu-system-x86_64']),
  ('core',[['python3','scripts/test_core.py']],['qemu-system-x86_64']),
  ('gui',[['python3','scripts/test_gui.py']],['qemu-system-x86_64']),
+ ('raton',[['python3','scripts/test_raton.py']],['qemu-system-x86_64']),
  ('persistence',[['python3','scripts/test_persistence.py']],['qemu-system-x86_64']),
  ('utf8-persistence',[['python3','scripts/test_utf8_persistence.py']],['qemu-system-x86_64']),
  ('ai-transport-mock',[['python3','scripts/test_ai.py']],['qemu-system-x86_64']),

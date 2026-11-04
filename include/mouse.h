@@ -5,7 +5,12 @@
 /* Raton PS/2 estandar y touchpads en modo de compatibilidad PS/2 (relativos).
  * Los touchpads absolutos por I2C/SMBus no se soportan: no hay controlador
  * I2C en este kernel y el firmware del portatil no los expone por 0x60/0x64. */
-typedef struct { int x, y, buttons, wheel, ready; } mouse_state_t;
+typedef struct {
+    int x, y, buttons, wheel, ready;
+    /* Diagnostico: paquetes completos atendidos y bytes descartados al
+     * resincronizar. Un valor creciente delata perdida de paquetes. */
+    int packets, discards;
+} mouse_state_t;
 
 int mouse_init(void);
 void mouse_poll(void);

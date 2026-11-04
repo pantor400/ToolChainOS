@@ -23,7 +23,11 @@ void interrupts_init(void){
     __asm__ volatile("lidt %0"::"m"(desc):"memory");
     pic(0x20,0x11);pic(0xa0,0x11);pic(0x21,0x20);pic(0xa1,0x28);
     pic(0x21,4);pic(0xa1,2);pic(0x21,1);pic(0xa1,1);
-    pic(0x21,0xfe);pic(0xa1,0xff);
+    /* IRQ0 (PIT) e IRQ2 (cascada al PIC esclavo); IRQ1 sigue enmascarada y el
+     * teclado se sondea como antes. Sin la cascada, la IRQ12 del raton nunca
+     * llega al procesador y el puntero solo avanza cuando el bucle grafico
+     * sondea: se queda atras al mover rapido. */
+    pic(0x21,0xfa);pic(0xa1,0xff);
     outb(0x43,0x36);outb(0x40,11932&255);outb(0x40,11932>>8);
     __asm__ volatile("sti");
 }
@@ -31,7 +35,7 @@ struct frame {uint64_t r15,r14,r13,r12,r11,r10,r9,r8,rdi,rsi,rbp,rdx,rcx,rbx,rax
 void interrupt_dispatch(struct frame *f){
     if(f->vector==32){ticks++;outb(0x20,0x20);return;}
     if(f->vector>=32&&f->vector<48){
-        if(f->vector==44)mouse_irq(); /* IRQ12: un byte del paquete PS/2 */
+        if(f->vector==33||f->vector==44)mouse_irq(); /* IRQ1/IRQ12: byte del PS/2 */
         if(f->vector>=40)outb(0xa0,0x20);
         outb(0x20,0x20);
         return;

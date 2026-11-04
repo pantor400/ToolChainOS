@@ -18,7 +18,7 @@ Formato (little endian, sin relleno):
                    u16  height
                    u32  offset     desde el inicio del blob
                    u32  size       bytes de pixeles
-                   u32  reserved
+                   u32  extension  1 jpg, 2 jpeg, 3 png; 0 si el blob es antiguo
     ...        u16   pixels[width * height]  RGB565 fila a fila
 
 Uso:
@@ -44,6 +44,9 @@ ENTRY_SIZE = 48
 NAME_MAX = 32
 MAX_WIDTH = 1920
 MAX_HEIGHT = 1200
+# La extension viaja en el blob para que el sistema de archivos publique cada
+# imagen en /wallpapers con su nombre real (Logo.jpg, no Logo).
+EXTENSION_CODES = {'.jpg': 1, '.jpeg': 2, '.png': 3}
 
 
 def parse_size(text):
@@ -139,7 +142,7 @@ def build(size, output):
         name = path.stem
         if len(name.encode('utf-8')) >= NAME_MAX:
             name = name.encode('utf-8')[:NAME_MAX - 1].decode('utf-8', 'ignore')
-        images.append((name, image, pixels_rgb565(image)))
+        images.append((name, image, pixels_rgb565(image), EXTENSION_CODES[path.suffix.lower()]))
         print(f'  {path.name}: {image.width}x{image.height} ({len(images[-1][2])} B RGB565)')
     header = bytearray()
     header += MAGIC
@@ -147,10 +150,10 @@ def build(size, output):
     offset = 16 + ENTRY_SIZE * len(images)
     entries = bytearray()
     payload = bytearray()
-    for name, image, data in images:
+    for name, image, data, extension in images:
         raw = name.encode('utf-8')[:NAME_MAX - 1]
         entries += raw + b'\0' * (32 - len(raw))
-        entries += struct.pack('<HHIII', image.width, image.height, offset, len(data), 0)
+        entries += struct.pack('<HHIII', image.width, image.height, offset, len(data), extension)
         payload += data
         offset += len(data)
     output.parent.mkdir(parents=True, exist_ok=True)

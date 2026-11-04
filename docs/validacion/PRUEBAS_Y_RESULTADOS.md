@@ -190,3 +190,92 @@ Notas de alcance:
 - `make test-all` incluye ahora los grupos `usb` y `secureboot` además de los 18
   históricos del cierre V3.1; ambos se ejecutaron por separado con PASSED. No se
   reescribieron `artifacts/results.json` ni las evidencias anteriores.
+
+## Puntero de la GUI
+
+Fecha de ejecución: 2026-11-04. QEMU `q35`, 1280x720, sin ventana; los
+movimientos y las capturas se inyectan por QMP.
+
+| Objetivo | Comprueba | Resultado |
+|---|---|---|
+| `make test-raton` | `gui` con el puntero centrado, ráfagas de eventos relativos por QMP, posición final exacta tras un tramo asimétrico, `DESCARTES=0` y comparación de recortes PPM antes/después del paso del cursor | PASSED |
+| `make test-gui` | Regresión completa del escritorio, apps ELF, hoja de cálculo, ventanas y teclado tras cambiar el reparto del PS/2 | PASSED |
+
+Salida resumida de `make test-raton`:
+
+```text
+OK  resolucion 1280x720, puntero inicial en (640, 360)
+OK  al moverse se repone el fondo del centro (sin estela)
+OK  el puntero vuelve al centro con la misma forma
+OK  sin rastro en (1120, 600) tras abandonar la zona
+OK  seguimiento exacto tras la rafaga: X=880 Y=480
+OK  paquetes atendidos: 10
+OK  ningun byte descartado: paquetes PS/2 alineados
+RATON: TODAS LAS COMPROBACIONES SUPERADAS
+```
+
+Causas encontradas y corregidas:
+
+1. `interrupts_init()` dejaba el PIC maestro en `0xFE`: la cascada IRQ2 estaba
+   enmascarada y la IRQ12 del ratón nunca llegaba al procesador. El puntero solo
+   avanzaba cuando el bucle gráfico sondeaba tras despertar del `hlt`, de ahí el
+   retraso al mover rápido. Ahora el maestro queda en `0xFA` (IRQ0 + cascada) y
+   la IRQ1 del teclado sigue enmascarada, con el teclado por sondeo.
+2. `keyboard_read()` leía un byte del i8042 y, si era del ratón (`status & 0x20`),
+   lo tiraba: rompía el paquete de 3 bytes y el puntero saltaba. Ahora drena con
+   `mouse_poll()`, que reparte cada byte por el bit 5 del estado.
+3. `mouse_poll()` y `mouse_irq()` compartían `packet_index` sin exclusión y
+   `mouse_state()` podía mezclar una X nueva con una Y vieja. El drenaje va con
+   `cli`/`sti` (guardando RFLAGS) y el estado se lee con la misma protección.
+   `mouse_init()` también cierra las interrupciones para no perder el ACK 0xFA.
+4. Los paquetes con desbordamiento anulaban el delta (`dx = 0`): ahora se aplica
+   el byte recibido y el puntero no se detiene en los movimientos rápidos.
+
+Sobre el rastro: el cursor se dibuja solo en el framebuffer. `gui_present()`
+repone el rectángulo anterior desde el búfer lógico antes de pintar el nuevo,
+también en el volcado directo, y no redibuja si ni el puntero ni el daño
+cambiaron. La prueba lo verifica comparando la zona abandonada con la captura
+inicial: debe ser idéntica al fondo.
+
+## Árbol con contenido real y galería en el explorador
+
+Fecha de ejecución: 2026-11-04. QEMU `q35`, 1280x720, sin ventana.
+
+| Objetivo | Comprueba | Resultado |
+|---|---|---|
+| `make test-files` | Que `/docs` existe con su documentación, que `/wallpapers` tiene una ficha por imagen empaquetada con el nombre del archivo de origen, que `OPEN` sobre una ficha devuelve sus datos y que `RM` sobre ella responde `SOLO LECTURA` | PASSED (46 comprobaciones) |
+| `make test-gui` | Regresión del escritorio completa, incluida la apertura del visor y las apps ELF | PASSED |
+| `make test-raton` | Puntero sin pérdida de paquetes ni estela | PASSED |
+
+Salida resumida del arranque y de `make test-files`:
+
+```text
+FS: GALERIA /wallpapers IMAGENES=3
+FS: ARCHIVOS DEL SISTEMA EN SOLO LECTURA
+...
+PASSED: 46 comprobaciones seriales archivos/editor
+```
+
+Capturas de la comprobación manual (QMP + `screendump`): el explorador muestra
+`/wallpapers` con `LEEME`, `wallpaper.jpg`, `Logo.jpg` y `Wallpaper0.jpg`, la
+última línea indica `/wallpapers/LEEME`, y el visor abre con el pie
+`/wallpapers/wallpaper.jpg`. En la raíz aparecen `docs`, `etc`, `boot`, `proc`,
+`wallpapers`, `script` y `nota`.
+
+Qué se corrigió:
+
+1. El catálogo de imágenes vivía solo en el blob (`src/images.c`) y el sistema de
+   archivos solo sembraba `/wallpapers/wallpaper.jpg`: `Logo.jpg` y
+   `Wallpaper0.jpg` se veían en la ventana Imágenes pero no existían como
+   archivos. Ahora el blob guarda la extensión de origen en el último `u32` de
+   cada entrada y `fs_seed_gallery()` publica una ficha por imagen con su nombre
+   real, dimensiones y bytes RGB565 medidos.
+2. El árbol arrancaba con muy poco contenido útil. Se añade `/docs` con `LEEME`,
+   `COMANDOS`, `GUI` y `ARCHIVOS`; `/etc/fstab` ya no declara un `/tmp` que no
+   existía y el mensaje del día invita a `LS /docs`.
+3. Un archivo con extensión `.jpg`/`.png` que no estuviera en el blob abría la
+   primera imagen del catálogo: se mostraba algo que no era el archivo elegido.
+   Ahora se avisa de que no está empaquetado.
+4. La ubicación no se veía en ninguna ventana. El explorador muestra la ruta
+   absoluta del elemento marcado y el pie del visor muestra
+   `/wallpapers/<imagen>`.

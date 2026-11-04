@@ -72,7 +72,9 @@ dibujar basura.
   solo llaman a `present()` cuando llega un evento.
 - El cursor se dibuja **directamente en el framebuffer** después del volcado y se
   restaura desde el back buffer antes del siguiente, así que no deja estelas ni
-  obliga a repintar la ventana entera al mover el ratón.
+  obliga a repintar la ventana entera al mover el ratón. La reposición ocurre en
+  todos los modos de volcado y, si ni el puntero ni el daño cambiaron, no se
+  redibuja nada.
 - Todo dibujo pasa por `draw_target` (back buffer o superficie de la app) y por
   un rectángulo de recorte, lo que permite que las apps pinten sin salirse de su
   ventana.
@@ -138,12 +140,25 @@ convertidos.
   visor o vuelve al escritorio. Las acciones usan el mismo `fs_*` del kernel,
   con mensajes de error en la propia ventana. `Editar` entrega la ruta al editor
   por el `launch_file` del ABI. Los nodos internos (`/etc`, `/boot`, `/proc`,
-  `/wallpapers`) se pintan en ámbar con `RO` y deshabilitan `Borrar`/`Renombrar`
-  (y `Nuevo`/`Carpeta` dentro de una carpeta del sistema).
+  `/docs`, `/wallpapers`) se pintan en ámbar con `RO` y deshabilitan
+  `Borrar`/`Renombrar` (y `Nuevo`/`Carpeta` dentro de una carpeta del sistema).
+  La última línea de la ventana muestra la ruta absoluta del elemento marcado
+  (`files_node_path()`), o el mensaje de la última acción si lo hay.
 - **Ventana Imágenes:** lista las imágenes del blob con su tamaño y una vista
-  previa escalada; las flechas cambian de imagen y `ESC` la cierra. Abrir un
-  `.jpg`, `.jpeg` o `.png` desde Archivos abre el visor en esa imagen (coincidencia
-  por nombre con el blob). Emite `GUI: VISOR IMAGENES` y `GUI: IMAGEN <n> WxH`.
+  previa escalada; las flechas cambian de imagen y `ESC` la cierra. El pie indica
+  la ruta del archivo dentro del sistema (`/wallpapers/<imagen>`). Abrir un
+  `.jpg`, `.jpeg` o `.png` desde Archivos abre el visor en esa imagen por
+  coincidencia de nombre con el blob; si el nombre no está empaquetado se avisa
+  en la línea de estado en lugar de mostrar otra imagen. Emite
+  `GUI: VISOR IMAGENES` y `GUI: IMAGEN <n> WxH`.
+- **Galería sembrada:** `fs_seed_gallery()` (en `src/fs.c`) recorre el catálogo
+  del blob al arrancar y crea en `/wallpapers` una ficha por imagen con el nombre
+  del archivo de origen, sus dimensiones y sus bytes RGB565. El nombre sale de
+  `images_name()` y la extensión de `images_extension()`, que lee el último `u32`
+  de cada entrada del blob (1 jpg, 2 jpeg, 3 png; 0 en blobs antiguos se trata
+  como jpg). Así el explorador y el visor enumeran el mismo conjunto de imágenes
+  y cada fila tiene una ruta real. Los ficheros de `/docs` se siembran igual y
+  documentan la consola, el escritorio y el propio árbol.
 - Arrastre por la barra de título, cierre por el botón o con `ESC`. Todo cierre
   pasa por `close_window()`, que invalida el área y el dock; la siguiente
   presentación devuelve el fondo y no quedan restos del contenido anterior.
@@ -154,11 +169,25 @@ convertidos.
 
 Secuencia de arranque sobre el i8042: `0xA8`, lectura/escritura del byte de
 configuración con IRQ12 habilitada y reloj activo, `0xF6` (valores por defecto),
-`0xF3 0x64` (40 muestras/s), `0xE8 0x03` (resolución) y `0xF4` (habilitar).
+`0xF3 0x64` (100 muestras/s), `0xE8 0x03` (8 cuentas/mm) y `0xF4` (habilitar).
+La secuencia se ejecuta con las interrupciones cerradas: el ACK `0xFA` llega por
+el mismo puerto 0x60 y una IRQ del PS/2 podría consumirlo.
 
-- La IRQ12 se desenmascara sola en el PIC esclavo (`inb(0xa1) & ~0x10`).
-- Los paquetes de 3 bytes se resincronizan por el bit 3 del primer byte, de modo
-  que un byte perdido no desalinea el flujo.
+- La cascada del PIC maestro queda abierta en `interrupts_init()` (máscara
+  `0xFA` = IRQ0 + IRQ2) y la IRQ1 del teclado sigue enmascarada. Sin la cascada,
+  la IRQ12 del ratón nunca llega al procesador.
+- `mouse_init()` desenmascara solo IRQ12 en el PIC esclavo (`inb(0xa1) & ~0x10`).
+- La IRQ12, la IRQ1 (atendida por el mismo despacho si se habilita) y el sondeo
+  comparten el i8042: `mouse_irq()` drena el controlador en cada interrupción y
+  `mouse_poll()` hace lo mismo con `cli`/`sti`, repartiendo cada byte por el bit 5
+  del estado (`1` ratón). `keyboard_read()` llama a `mouse_poll()` en vez de leer
+  y descartar bytes, de modo que un paquete de 3 bytes nunca se rompe.
+- `mouse_state()` toma posición, botones y contadores con las interrupciones
+  cerradas, para no mezclar una X nueva con una Y vieja.
+- Los paquetes de 3 bytes se resincronizan por el bit 3 del primer byte; el
+  contador `DESCARTES` (visible en `RATON`) delata cualquier desalineación. Los
+  paquetes con desbordamiento aplican el byte recibido en lugar de anular el
+  movimiento.
 - `mouse_poll()` replica la lectura en sondeo: si la IRQ no llega (por ejemplo en
   un arranque UEFI con el controlador en otro estado), el puntero sigue
   respondiendo.
