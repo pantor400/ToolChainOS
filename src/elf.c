@@ -8,6 +8,8 @@
 #include "pmm.h"
 #include "shell.h"
 #include "util.h"
+#include "web.h"
+#include "font_ui.h"
 
 /* Cabeceras ELF64 minimas: no se enlaza libelf ni se usa <elf.h>. */
 #define ELF_MAGIC 0x464c457fu
@@ -55,7 +57,7 @@ static void api_rect(int x, int y, int w, int h, uint32_t rgb) { gui_app_rect(x,
 static void api_frame(int x, int y, int w, int h, uint32_t rgb) { gui_app_frame(x, y, w, h, rgb); }
 static void api_text(int x, int y, const char *text, uint32_t rgb, int scale) { gui_app_text(x, y, text, rgb, scale); }
 static int api_text_width(const char *text, int scale) {
-    return gui_text_width(text, scale > 1 ? gui_font_body() : gui_font_small());
+    return gui_text_width(text, scale < 0 ? &gui_font_reg15 : scale > 1 ? gui_font_body() : gui_font_small());
 }
 static void api_icon(int icon, int x, int y, int size, uint32_t rgb) { gui_app_icon(icon, x, y, size, rgb); }
 static int api_pump(host_event_t *event) {
@@ -136,6 +138,8 @@ static const host_api_t host = {
     .exec = api_exec, .key = api_key,
     .launch_file = api_launch_file,
     .is_system = api_is_system,
+    .web_start = web_start, .web_poll = web_poll, .web_cancel = web_cancel,
+    .escape_events = gui_app_escape_events,
 };
 
 /* --- Servicios del cargador -------------------------------------------- */
@@ -305,6 +309,7 @@ static int load_and_run(const uint8_t *image, size_t size, const char *name) {
     elf_call_app(loaded.entry, stack_top, &host);
     busy = 0;
 
+    web_cancel();
     gui_app_close();
     pmm_free_run(stack_physical, stack_pages);
     elf_free_image(&loaded);

@@ -30,7 +30,7 @@ Arranca en BIOS y UEFI desde una ISO híbrida y se ejecuta en QEMU.
 | **Consultar el sistema y los archivos** | Ventana Sistema con CPU, núcleos, RAM, heap, tareas, red, ratón y uptime; ventana Archivos con navegación, apertura, creación, borrado y renombrado, los archivos internos del sistema (`/etc`, `/boot`, `/proc`, `/docs`, `/wallpapers`) visibles pero bloqueados en solo lectura, y la ruta completa del elemento marcado en la última línea |
 | **Poner tu propio fondo y ver imágenes** | El escritorio usa `images/wallpaper.jpg` como fondo (recortado y escalado en el build); la ventana Imágenes muestra la vista previa de todas las imágenes empaquetadas |
 | **Conectar la máquina a la red** | Driver PCI RTL8139 con MAC, ARP, ping ICMP y DNS por UDP sobre la red de usuario de QEMU (IP fija 10.0.2.15/24) |
-| **Cargar programas propios** | Cargador ELF64 de PIE estáticos con `host_api_t` v5 (editor, terminal y hoja de cálculo incluidos en `apps/`), con `is_system` para respetar los archivos internos |
+| **Cargar programas propios** | Cargador ELF64 de PIE estáticos con `host_api_t` v6 (editor, terminal, hoja de cálculo y navegador incluidos en `apps/`), con `is_system` para respetar los archivos internos |
 | **Trabajar con una hoja de cálculo** | Rejilla de 8x16 con fórmulas (`=A1+B2`, `=SUMA(A1:B3)`, `=PROMEDIO`, `=MIN`, `=MAX`, `=CONTAR`), guardado y apertura en CSV desde la propia ventana (sección 13) |
 | **Conversar con una IA local** | Protocolo binario TC/1 por COM2 hacia Ollama, probado extremo a extremo con UTF-8 |
 
@@ -253,7 +253,7 @@ no está empaquetada.
 | `LINUX <applet> [args]` | Ejecuta un applet de BusyBox con la personalidad Linux (sección 12) |
 | `LINUX LIST`, `LINUX INFO`, `LINUX TRACE` | Binarios disponibles, estado de SYSCALL y traza de llamadas |
 
-Las apps reciben `host_api_t` en `RDI` (ABI 5): ventana propia, primitivas con el
+Las apps reciben `host_api_t` en `RDI` (ABI 6): ventana propia, primitivas con el
 tema del sistema, eventos relativos a su lienzo, sistema de archivos del kernel
 (`read_file`, `write_file`, `make_dir`, `remove_node`, `rename_node`, `nodes`,
 `cwd`/`chdir`, `is_system`), `exec` para lanzar órdenes del shell capturando la
@@ -684,7 +684,7 @@ Dentro del escritorio:
 
 ```text
 OS> gui hoja          (o el botón Apps del dock y "hoja")
-hoja.elf: HOJA 8X16 LISTA ABI=5
+hoja.elf: HOJA 8X16 LISTA ABI=6
 hoja.elf: FORMULA C1 =b1-a1 -> 2
 hoja.elf: CELDA C2 10
 hoja.elf: GUARDADO /hoja.csv
@@ -745,7 +745,7 @@ recorta las columnas vacías del final de cada fila.
 La app escribe en el puerto serie lo que hace, de modo que `make test-gui`
 verifica el cálculo y el guardado sin capturas de pantalla:
 
-`hoja.elf: HOJA 8X16 LISTA ABI=5`, `hoja.elf: ABIERTO <ruta>`,
+`hoja.elf: HOJA 8X16 LISTA ABI=6`, `hoja.elf: ABIERTO <ruta>`,
 `hoja.elf: SIN ARCHIVO <ruta>`, `hoja.elf: GUARDADO <ruta>`,
 `hoja.elf: ERROR GUARDADO <ruta>`, `hoja.elf: HOJA VACIA`,
 `hoja.elf: CELDA <celda> <texto>`,
@@ -957,3 +957,25 @@ rendimiento. Cada afirmación de este README se puede reproducir con los objetiv
 `Makefile` y los registros de `artifacts/`.
 
 
+
+
+## ToolchainOS Web
+
+Navegador educativo ELF con barra de URL, enlaces, historial, recarga y scroll.
+Se abre con GUI WEB o desde Apps. Requiere el puente Ubuntu para descargar
+HTML real por HTTP/HTTPS; la ayuda local funciona sin puente.
+
+~~~sh
+make -j2 iso check
+python3 scripts/run_vm.py --web
+# Con un modelo Ollama ya instalado:
+OLLAMA_MODEL=nombre_del_modelo python3 scripts/run_vm.py --ai --web
+~~~
+
+COM1 conserva consola, COM2 IA y COM3 web. TLS se verifica en Ubuntu; RTL8139
+conserva ICMP/DNS sin TCP/TLS nativos. HTML estático, sin JavaScript, CSS completo,
+login o multimedia. Apps en ring 0.
+
+[Uso y pruebas](docs/guias/USO_NAVEGADOR.md) ·
+[Arquitectura, protocolo y limites](docs/diseno/NAVEGADOR_WEB.md) ·
+[Validación de integración](docs/guias/VALIDACION_TOOLCHAINOS_WEB.md).

@@ -240,7 +240,7 @@ resuelve dentro de ese sondeo.
 - Al terminar se liberan páginas y pila e imprime
   `ELF: FIN <nombre> CODIGO=<n>`.
 
-Contrato `host_api_t` (`HOST_ABI_VERSION == 5`) recibido en `RDI`:
+Contrato `host_api_t` (`HOST_ABI_VERSION == 6`) recibido en `RDI`:
 
 | Campo | Efecto |
 |---|---|
@@ -317,11 +317,11 @@ barra cuando cambia el minuto.
 8. `GUI: VENTANA CERRADA Editor de texto LIMPIA` al salir del editor, que valida
    que el área cerrada vuelve al fondo del escritorio, y `ELF: FIN editor.elf
    CODIGO=0`.
-9. `GUI EDIT demo2.txt` abre el editor con `ABIERTO /demo2.txt` (handoff ABI 5) y
+9. `GUI EDIT demo2.txt` abre el editor con `ABIERTO /demo2.txt` (handoff ABI 6) y
    `gui edit motd` desde `/etc` devuelve `editor.elf: SOLO LECTURA /etc/motd`.
 10. La terminal ejecuta `help` y su salida aparece por COM1 antes de volver al
     escritorio.
-11. `hoja.elf: HOJA 8X16 LISTA ABI=5`, `ABIERTO /hoja.csv` al pulsar Abrir, la
+11. `hoja.elf: HOJA 8X16 LISTA ABI=6`, `ABIERTO /hoja.csv` al pulsar Abrir, la
     fórmula `=b1-a1` deja `FORMULA C1 =b1-a1 -> 2`, una celda nueva imprime
     `CELDA C2 10` y Guardar deja `GUARDADO /hoja.csv`, que la shell lee después.
     El bloque cambia a `TECLADO US` para escribir `=` y vuelve a `ES`.
@@ -351,3 +351,15 @@ make iso RES=1920x1080 && python3 scripts/test_gui.py   # perfil HD
   por archivo, y `hoja.csv` debe caber en el límite de 1 KiB del FS.
 - Sin TCP/IP ni IPv6 (solo ARP, ICMP y DNS sobre IPv4), DHCP, teclado USB,
   audio ni cambio de resolución en caliente.
+
+
+## Navegador ELF
+
+Navegador gráfico ELF integrado en Apps y GUI WEB. Iniciar con
+python3 scripts/run_vm.py --web; IA simultánea con --ai --web.
+HTTP/HTTPS y TLS verificado se ejecutan en Ubuntu por COM3; RTL8139
+conserva ICMP/DNS y no implementa TCP/TLS nativos. HTML estático y enlaces,
+sin CSS completo, JavaScript, login o multimedia. Apps en ring 0.
+Consultar docs/diseno/NAVEGADOR_WEB.md y docs/guias/USO_NAVEGADOR.md
+para límites y comandos; la validación de integración se registra en
+docs/guias/VALIDACION_TOOLCHAINOS_WEB.md. Los resultados generados son locales.

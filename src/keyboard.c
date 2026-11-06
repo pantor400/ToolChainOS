@@ -1,11 +1,14 @@
 #include "keyboard.h"
 #include "utf8.h"
 #include "mouse.h"
+#include <stdatomic.h>
 static unsigned layout=KEYBOARD_ES,shift_l,shift_r,caps,caps_down,extended,pause_bytes,altgr;
 static uint32_t dead;
-/* Cola de 16 bytes: un escalar UTF-8 de 4 bytes siempre cabe completo. */
-static uint8_t queue[16];
-static unsigned queued,read_pos;
+/* SPSC ring: interrupt/poll producer, shell/GUI consumer. A burst during
+ * framebuffer repaint reuses consumed slots and retains up to 128 bytes.
+ * UTF-8 scalars are published atomically, never partially enqueued. */
+static uint8_t queue[128];
+static _Atomic unsigned write_pos,read_pos;
 /* Cola de teclas extendidas: no viaja como byte, asi que no rompe el UTF-8
  * que consume la shell. */
 static unsigned specials[8];
@@ -13,18 +16,25 @@ static unsigned specials_in,specials_out;
 const char *keyboard_layout_name(void){return layout==KEYBOARD_ES?"ES-LATAM (PERU)":"US";}
 int keyboard_set_layout(unsigned value){
     if(value!=KEYBOARD_ES&&value!=KEYBOARD_US)return 0;
-    layout=value;shift_l=shift_r=caps=caps_down=extended=pause_bytes=altgr=0;dead=0;queued=read_pos=0;
+    layout=value;shift_l=shift_r=caps=caps_down=extended=pause_bytes=altgr=0;dead=0;atomic_store(&write_pos,0);atomic_store(&read_pos,0);
     specials_in=specials_out=0;return 1;
 }
 static void emit(uint32_t cp){
     char bytes[4];unsigned n=utf8_encode(cp,bytes);
-    if(read_pos==queued){read_pos=queued=0;}
-    /* Se descarta el escalar entero, nunca una parte: media secuencia UTF-8
-     * es peor que una tecla perdida. */
-    if(queued+n>sizeof(queue))return;
-    for(unsigned i=0;i<n;i++)queue[queued++]=(uint8_t)bytes[i];
+    unsigned head=atomic_load_explicit(&write_pos,memory_order_relaxed);
+    unsigned tail=atomic_load_explicit(&read_pos,memory_order_acquire);
+    if(n>sizeof(queue)-(head-tail))return;
+    for(unsigned i=0;i<n;i++)queue[(head+i)%sizeof(queue)]=(uint8_t)bytes[i];
+    atomic_store_explicit(&write_pos,head+n,memory_order_release);
 }
-int keyboard_next_byte(void){if(read_pos>=queued)return -1;return queue[read_pos++];}
+int keyboard_next_byte(void){
+    unsigned tail=atomic_load_explicit(&read_pos,memory_order_relaxed);
+    unsigned head=atomic_load_explicit(&write_pos,memory_order_acquire);
+    if(tail==head)return -1;
+    int byte=queue[tail%sizeof(queue)];
+    atomic_store_explicit(&read_pos,tail+1,memory_order_release);
+    return byte;
+}
 static void special(uint32_t code){
     if(specials_in-specials_out>=sizeof(specials)/sizeof(specials[0]))return;
     specials[specials_in++%8]=code;

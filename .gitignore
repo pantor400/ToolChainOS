@@ -42,3 +42,13 @@ __pycache__/
 *:Zone.Identifier
 .DS_Store
 Thumbs.db
+
+# ToolchainOS Web: salidas de pruebas y paquetes locales, nunca credenciales
+/artifacts/navegador-web/
+/respaldos/
+*.zip
+*.tar.gz
+.env
+.env.*
+!.env.example
+.ollama/

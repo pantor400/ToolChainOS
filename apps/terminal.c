@@ -437,6 +437,10 @@ int main(host_api_t *api) {
         if (dirty && !closing) {
             draw(api);
             api->present();
+            /* Test/client synchronization after command output AND repaint.
+             * HELP formatting can take longer than the first serial marker. */
+            if (event.type == HOST_EV_KEY && event.key == '\n')
+                api->write("terminal.elf: ORDEN LISTA\n");
             dirty = 0;
         }
     }

@@ -8,7 +8,7 @@
  * v3 anade sistema de archivos, teclas extendidas y ejecucion de ordenes.
  * v4 anade la ruta con la que el escritorio lanza la aplicacion.
  * v5 anade la consulta de archivos internos del sistema (solo lectura). */
-#define HOST_ABI_VERSION 5u
+#define HOST_ABI_VERSION 6u
 
 struct fs_node;
 
@@ -34,6 +34,7 @@ typedef struct host_api {
     void (*clear)(uint32_t rgb);
     void (*rect)(int x, int y, int width, int height, uint32_t rgb);
     void (*frame)(int x, int y, int width, int height, uint32_t rgb);
+    /* v6: scale < 0 selects fixed 15px UI font at every resolution. */
     void (*text)(int x, int y, const char *text, uint32_t rgb, int scale);
     int  (*text_width)(const char *text, int scale);
     void (*icon)(int icon, int x, int y, int size, uint32_t rgb);
@@ -69,6 +70,12 @@ typedef struct host_api {
     /* 1 si la ruta es un archivo interno del sistema: se puede leer pero no
      * escribir, borrar ni renombrar. El editor lo muestra en solo lectura. */
     int  (*is_system)(const char *path);
+    /* --- v6: asynchronous, bounded web transport; existing fields unchanged. */
+    int (*web_start)(const char *url);
+    int (*web_poll)(void *buffer, uint32_t capacity);
+    void (*web_cancel)(void);
+    /* Opt-in ESC delivery; default retains existing app behavior. */
+    void (*escape_events)(int enabled);
 } host_api_t;
 
 #endif

@@ -168,6 +168,13 @@ static void gui_command(const char *args){
     }
     /* GUI HOJA: abre el escritorio con la hoja de calculo ya cargada, sin
      * tener que recorrer la ventana de aplicaciones. */
+    if(ci_same(first,"WEB") || ci_same(first,"NAVEGADOR")){
+        int index=elf_find("navegador.elf");
+        if(index<0)console_write("GUI: NAVEGADOR NO DISPONIBLE EN LA ISO.\n");
+        else elf_run((unsigned)index);
+        gui_run();
+        return;
+    }
     if(ci_same(first,"HOJA")){
         int index=elf_find("hoja.elf");
         if(index<0)console_write("GUI: HOJA DE CALCULO NO DISPONIBLE EN LA ISO.\n");
@@ -275,6 +282,7 @@ static void help(void){
         "    RUN CPP [archivo]      INTERPRETE C LIMITADO; ALIAS RUN_CPP\n"
         "  INTERFAZ GRAFICA, RED Y APLICACIONES\n"
         "    GUI | ESCRITORIO        ABRE LA INTERFAZ; GUI DEMO UN FOTOGRAMA\n"
+        "    GUI WEB                 NAVEGADOR HTML; --web HABILITA PUENTE HTTP/TLS EN UBUNTU\n"
         "    GUI EDIT <archivo>      ABRE EL EDITOR CON ESE ARCHIVO\n"
         "    GUI HOJA                HOJA DE CALCULO EN EL ESCRITORIO\n"
         "    RATON                   RATON/TOUCHPAD PS/2: POSICION Y BOTONES\n"

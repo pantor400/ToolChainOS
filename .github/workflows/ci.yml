@@ -55,6 +55,12 @@ jobs:
       - name: Protocolo TC/1 sin IA
         run: python3 -B scripts/test_ai_protocol.py
 
+      - name: Puente web HTTP/HTTPS (politica, HTML y framing, sin Internet)
+        run: python3 -B scripts/test_web_host.py
+
+      - name: App web, cliente COM3 y cola PS/2 (ASan/UBSan)
+        run: make test-web-app-host test-web-transport-host test-keyboard-ring-host
+
       - name: Guardar la ISO
         uses: actions/upload-artifact@v7
         with:

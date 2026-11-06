@@ -184,7 +184,7 @@ test-all:
 # V3.1: teclado PS/2 bilingue y texto UTF-8. Sin cambios en perfiles originales.
 .PHONY: test-utf8-host test-keyboard test-utf8-persistence test-ai-utf8
 test-utf8-host: | $(BUILD)
-	$(HOST_CC) -std=c11 -Wall -Wextra -Werror $(SANFLAGS) -Iinclude -Ivendor/limine scripts/test_utf8_host.c src/utf8.c src/keyboard.c src/glyph.c src/fs.c -o $(BUILD)/test-utf8-host
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror $(SANFLAGS) -Iinclude -Ivendor/limine scripts/test_utf8_host.c src/utf8.c src/keyboard.c src/glyph.c src/fs.c scripts/test_host_devices.c -o $(BUILD)/test-utf8-host
 	$(BUILD)/test-utf8-host
 test-keyboard: iso
 	python3 scripts/test_utf8_keyboard.py
@@ -220,7 +220,7 @@ test-scheduler-host: $(BUILD)/context.o
 APP_CFLAGS := -std=c11 -O2 -g -Wall -Wextra -Werror -ffreestanding -fno-builtin \
  -fno-stack-protector -fpie -fno-plt -mno-red-zone -mgeneral-regs-only \
  -fno-asynchronous-unwind-tables -Iinclude
-$(BUILD)/apps/%.elf: apps/%.c apps/app.ld | $(BUILD)
+$(BUILD)/apps/%.elf: apps/%.c apps/app.ld include/host_api.h | $(BUILD)
 	mkdir -p $(BUILD)/apps
 	$(CC) $(APP_CFLAGS) -nostdlib -static-pie -Wl,-e,main -Wl,--no-dynamic-linker \
 	 -Wl,--build-id=none -T apps/app.ld -o $@ $<
@@ -262,3 +262,25 @@ run-linux: $(LINUX_ISO)
 test-linux-bin: $(LINUX_ISO)
 	python3 scripts/test_linux_bin.py
 .PHONY: linux-bin linux-bin-check run-linux test-linux-bin
+
+.PHONY: run-web test-web
+run-web: iso
+	python3 scripts/run_vm.py --web $(VM_ARGS)
+test-web: iso test-web-app-host test-web-transport-host test-keyboard-ring-host
+	python3 scripts/test_web_host.py
+	python3 scripts/test_web_qemu.py
+
+.PHONY: test-web-app-host
+test-web-app-host: | $(BUILD)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror $(SANFLAGS) -Iinclude scripts/test_web_app_host.c -o $(BUILD)/test-web-app-host
+	$(BUILD)/test-web-app-host
+
+.PHONY: test-web-transport-host
+test-web-transport-host: | $(BUILD)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror $(SANFLAGS) -Iinclude scripts/test_web_transport_host.c -o $(BUILD)/test-web-transport-host
+	$(BUILD)/test-web-transport-host
+
+.PHONY: test-keyboard-ring-host
+test-keyboard-ring-host: | $(BUILD)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror $(SANFLAGS) -Iinclude scripts/test_keyboard_ring_host.c src/keyboard.c src/utf8.c -o $(BUILD)/test-keyboard-ring-host
+	$(BUILD)/test-keyboard-ring-host

@@ -265,6 +265,8 @@ def main():
             client.ascii('help\n')
             wait_for(serial_path, 'INTERFAZ GRAFICA, RED Y APLICACIONES', 20,
                      'orden ejecutada desde la terminal grafica')
+            wait_for(serial_path, 'terminal.elf: ORDEN LISTA', 20,
+                     'terminal lista tras formatear y dibujar HELP')
             client.ascii('crear demo.txt fsok\n')
             wait_for(serial_path, 'ARCHIVO GUARDADO CON EXITO', 20,
                      'archivo creado desde la terminal grafica')
@@ -348,6 +350,10 @@ def main():
             print('GUI: TODAS LAS COMPROBACIONES SUPERADAS')
             return 0
         finally:
+            if client:
+                client.call('screendump', {'filename':str(Path('artifacts/gui-final.png').resolve()), 'format':'png'})
+            if serial_path.exists():
+                Path('artifacts/gui.serial.txt').write_bytes(serial_path.read_bytes())
             if client:
                 client.close()
             process.terminate()
