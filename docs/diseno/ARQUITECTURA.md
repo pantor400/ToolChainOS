@@ -43,3 +43,15 @@ Véanse ../informes/INFORME_FINAL.md y ../validacion/PRUEBAS_Y_RESULTADOS.md par
 Se conserva TC/1 y el puente sin cambios. La salida IA ahora conserva UTF-8 válido
 en lugar del filtro ASCII por byte. No se cambian PMM, tareas, FS ni ATA.
 Detalles de distribución/codificación/fuente y límites: ../guias/TECLADO_UTF8.md.
+
+
+## Extensión web
+
+Navegador gráfico ELF integrado en Apps y GUI WEB. Iniciar con
+python3 scripts/run_vm.py --web; IA simultánea con --ai --web.
+HTTP/HTTPS y TLS verificado se ejecutan en Ubuntu por COM3; RTL8139
+conserva ICMP/DNS y no implementa TCP/TLS nativos. HTML estático y enlaces,
+sin CSS completo, JavaScript, login o multimedia. Apps en ring 0.
+Consultar docs/diseno/NAVEGADOR_WEB.md y docs/guias/USO_NAVEGADOR.md
+para límites y comandos; la validación de integración se registra en
+docs/guias/VALIDACION_TOOLCHAINOS_WEB.md. Los resultados generados son locales.

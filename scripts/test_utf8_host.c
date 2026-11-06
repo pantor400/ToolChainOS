@@ -15,6 +15,20 @@ static void expect(const char *want){
 }
 static void key(unsigned scan){keyboard_scancode(scan);keyboard_scancode(scan|0x80);}
 int main(void){
+ keyboard_set_layout(KEYBOARD_US);
+ for(int i=0;i<100;i++)key(30);
+ for(int i=0;i<60;i++)assert(keyboard_next_byte()=='a');
+ for(int i=0;i<80;i++)key(48);
+ for(int i=0;i<40;i++)assert(keyboard_next_byte()=='a');
+ for(int i=0;i<80;i++)assert(keyboard_next_byte()=='b');
+ assert(keyboard_next_byte()==-1);
+ keyboard_set_layout(KEYBOARD_ES);
+ for(int i=0;i<127;i++)key(30);
+ key(39); /* Two-byte ñ cannot fit: drop the whole scalar. */
+ for(int i=0;i<127;i++)assert(keyboard_next_byte()=='a');
+ assert(keyboard_next_byte()==-1);
+ key(39);expect("ñ");
+
  unsigned scalars=0;
  for(uint32_t cp=0;cp<=0x10ffff;cp++){
   if(cp>=0xd800&&cp<=0xdfff)continue;

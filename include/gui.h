@@ -59,6 +59,7 @@ void gui_reset_clip(void);
  * interfaz la compone con el resto de ventanas. */
 int  gui_app_window(const char *title, int width, int height);
 void gui_app_close(void);
+void gui_app_escape_events(int enabled);
 void gui_app_clear(uint32_t rgb);
 void gui_app_rect(int x, int y, int width, int height, uint32_t rgb);
 void gui_app_frame(int x, int y, int width, int height, uint32_t rgb);

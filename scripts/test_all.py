@@ -3,14 +3,16 @@
 import datetime,json,os,shutil,subprocess,time
 from pathlib import Path
 # Misma variable que el Makefile: SAN= desactiva los sanitizers del anfitrion.
-san=['-fsanitize='+os.environ['SAN']] if os.environ.get('SAN','address,undefined').strip() else []
+san=['-fsanitize='+os.environ.get('SAN','address,undefined')] if os.environ.get('SAN','address,undefined').strip() else []
 steps=[
  ('build',[['make','iso']],['gcc','nasm','ld','xorriso']),
  ('elf',[['make','check']],['python3']),
+ ('web-host',[['python3','scripts/test_web_host.py'],['make','test-web-app-host','test-web-transport-host','test-keyboard-ring-host']],['gcc','python3']),
+ ('web-qemu-fixture',[['python3','scripts/test_web_qemu.py']],['qemu-system-x86_64']),
  ('memory-host',[['make','test-memory-host']],['gcc']),
  ('scheduler-host',[['make','test-scheduler-host']],['gcc','nasm']),
  ('memory-scheduler-qemu',[['python3','scripts/test_memory_scheduler.py']],['qemu-system-x86_64']),
- ('fs-host',[['gcc','-std=c11','-Wall','-Wextra','-Werror',*san,'-Iinclude','-Ivendor/limine','scripts/test_fs_host.c','src/fs.c','-o','build/test-fs-host'],['build/test-fs-host']],['gcc']),
+ ('fs-host',[['gcc','-std=c11','-Wall','-Wextra','-Werror',*san,'-Iinclude','-Ivendor/limine','scripts/test_fs_host.c','src/fs.c','scripts/test_host_devices.c','-o','build/test-fs-host'],['build/test-fs-host']],['gcc']),
  ('utf8-host',[['make','test-utf8-host']],['gcc']),
  ('utf8-keyboard',[['python3','scripts/test_utf8_keyboard.py']],['qemu-system-x86_64']),
  ('legacy',[['python3','scripts/smoke_test.py']],['qemu-system-x86_64']),

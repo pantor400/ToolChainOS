@@ -465,3 +465,15 @@ elemento marcado y el pie del visor muestra `/wallpapers/<imagen>`; abrir un
 archivo con extension de imagen que no este empaquetado avisa en vez de mostrar
 otra imagen. Verificado: `make iso`, `make test-files` (46 comprobaciones) y
 `make test-gui` completos.
+
+
+## Navegador educativo HTTP/HTTPS — 2026-11-05
+
+Navegador gráfico ELF integrado en Apps y GUI WEB. Iniciar con
+python3 scripts/run_vm.py --web; IA simultánea con --ai --web.
+HTTP/HTTPS y TLS verificado se ejecutan en Ubuntu por COM3; RTL8139
+conserva ICMP/DNS y no implementa TCP/TLS nativos. HTML estático y enlaces,
+sin CSS completo, JavaScript, login o multimedia. Apps en ring 0.
+Consultar docs/diseno/NAVEGADOR_WEB.md y docs/guias/USO_NAVEGADOR.md
+para límites y comandos; la validación de integración se registra en
+docs/guias/VALIDACION_TOOLCHAINOS_WEB.md. Los resultados generados son locales.

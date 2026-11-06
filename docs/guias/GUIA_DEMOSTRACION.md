@@ -134,3 +134,15 @@ Las pruebas actuales son automatizadas y las capturas se inspeccionaron; no se
 afirma una prueba humana del teclado físico.
 PMMTEST/UPTIME/TASKS siguen operativos. EXTEST DE/PF detienen deliberadamente
 la VM: no usarlos dentro de la demostración principal.
+
+
+## Demostración web real
+
+Navegador gráfico ELF integrado en Apps y GUI WEB. Iniciar con
+python3 scripts/run_vm.py --web; IA simultánea con --ai --web.
+HTTP/HTTPS y TLS verificado se ejecutan en Ubuntu por COM3; RTL8139
+conserva ICMP/DNS y no implementa TCP/TLS nativos. HTML estático y enlaces,
+sin CSS completo, JavaScript, login o multimedia. Apps en ring 0.
+Consultar docs/diseno/NAVEGADOR_WEB.md y docs/guias/USO_NAVEGADOR.md
+para límites y comandos; la validación de integración se registra en
+docs/guias/VALIDACION_TOOLCHAINOS_WEB.md. Los resultados generados son locales.

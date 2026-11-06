@@ -15,6 +15,7 @@
 #include "tasks.h"
 #include "utf8.h"
 #include "util.h"
+#include "ai_serial.h"
 
 /* --- Estado global ------------------------------------------------------ */
 
@@ -49,6 +50,7 @@ static int images_selected;
 
 static struct limine_framebuffer *device;
 static gui_surface_t back;
+static uint64_t back_physical, back_page_count;
 static gui_surface_t app_surface;
 static uint64_t app_physical;
 static uint64_t app_page_count;
@@ -1928,7 +1930,10 @@ static void app_surface_release(void) {
     zero(&app_surface, sizeof(app_surface));
 }
 
+static int deliver_escape;
+void gui_app_escape_events(int enabled) { deliver_escape = enabled != 0; }
 void gui_app_close(void) {
+    deliver_escape = 0;
     gui_window_t *window = window_for(WIN_APP);
     int closed = window != 0;
     if (window) close_window(window);
@@ -1980,6 +1985,11 @@ int gui_app_window(const char *title, int width, int height) {
     window->y = content_y + (content_height - window->height) / 2;
     copystr(window->title, title ? title : "Aplicacion", sizeof(window->title));
     raise_window(window);
+    /* The mouse press that launched an ELF belongs to Apps, not its content. */
+    mouse_state_t pointer = mouse_state();
+    last_buttons = pointer.buttons;
+    last_mouse_x = pointer.x;
+    last_mouse_y = pointer.y;
     invalidate_window(window);
     return 1;
 }
@@ -2015,7 +2025,7 @@ void gui_app_frame(int x, int y, int width, int height, uint32_t rgb) {
 
 void gui_app_text(int x, int y, const char *text, uint32_t rgb, int text_scale) {
     if (!app_surface.pixels) return;
-    const gui_font_t *font = text_scale > 1 ? font_body : font_small;
+    const gui_font_t *font = text_scale < 0 ? &gui_font_reg15 : text_scale > 1 ? font_body : font_small;
     app_begin();
     gui_text(x, y + font->ascent, text, rgb, font);
     app_end();
@@ -2142,6 +2152,7 @@ int gui_pump(gui_event_t *event) {
     event->key = 0;
     mouse_poll();
     net_poll();
+    ai_poll();
     clock_refresh();
     mouse_state_t mouse = mouse_state();
     gui_window_t *window = window_for(WIN_APP);
@@ -2173,7 +2184,7 @@ int gui_pump(gui_event_t *event) {
         event->key = (uint32_t)special;
     } else if (key >= 0) {
         last_key = key;
-        if (key == 27) { gui_app_close(); event->type = GUI_EV_CLOSE; return 0; }
+        if (key == 27 && !deliver_escape) { gui_app_close(); event->type = GUI_EV_CLOSE; return 0; }
         event->type = GUI_EV_KEY;
         event->key = (uint32_t)key;
     }
@@ -2223,6 +2234,7 @@ void gui_run(void) {
     for (;;) {
         mouse_poll();
         net_poll();
+        ai_poll();
         clock_refresh();
         int special = keyboard_special();
         int key = console_read();
@@ -2314,6 +2326,8 @@ int gui_init(struct limine_framebuffer *framebuffer) {
         back.width = back.height = back.stride = 0;
         return 0;
     }
+    back_physical = physical;
+    back_page_count = pages;
     back.pixels = pmm_ptr(physical);
     zero(back.pixels, (size_t)bytes);
     /* Imagenes empaquetadas: la primera hace de fondo del escritorio. */
@@ -2361,6 +2375,9 @@ void gui_shutdown(void) {
     active = 0;
     draw_target = &back;
     blank_clip();
+    if (back_physical) pmm_free_run(back_physical, back_page_count);
+    back_physical = back_page_count = 0;
+    back.pixels = 0;
     console_suspend_screen(0);
     console_clear();
     console_write("GUI: SESION FINALIZADA; CONSOLA RESTAURADA.\n");
